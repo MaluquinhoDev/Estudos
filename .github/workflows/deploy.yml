@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   build-and-deploy:
-    name: Publish Estudos
+    name: Validate and publish Estudos
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -24,6 +24,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate application before publishing
+        run: |
+          test -f index.html
+          test -f app.js
+          test -f styles.css
+          test -f service-worker.js
+          test -f manifest.webmanifest
+          test -f icons/icon.svg
+          node --check app.js
+          node --check service-worker.js
+          node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8')); if (!m.name || !m.start_url || !m.icons?.length) process.exit(1)"
 
       - name: Set up GitHub Pages
         uses: actions/configure-pages@v5
