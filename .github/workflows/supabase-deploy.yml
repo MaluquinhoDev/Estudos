@@ -1,11 +1,8 @@
-name: Supabase - Deploy database migrations
+name: Supabase - Validate and deploy database migrations
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "supabase/**"
+  # First deployment is intentionally manual. Review the remote schema before
+  # applying the initial AVA migration to avoid colliding with existing tables.
   workflow_dispatch:
 
 permissions:
@@ -44,20 +41,17 @@ jobs:
             exit 1
           fi
 
-      - name: Check migration directory
+      - name: Check migration files
         shell: bash
         run: |
-          if [ ! -d supabase/migrations ]; then
-            echo "::error::supabase/migrations does not exist. Do not deploy an uninitialized schema."
-            exit 1
-          fi
+          test -f supabase/config.toml || { echo "::error::supabase/config.toml is missing"; exit 1; }
           if ! find supabase/migrations -maxdepth 1 -type f -name '*.sql' | grep -q .; then
             echo "::error::No SQL migration files found."
             exit 1
           fi
 
       - name: Set up Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@v3
         with:
           version: 3.0.0
 
