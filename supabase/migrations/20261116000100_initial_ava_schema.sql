@@ -73,7 +73,7 @@ create table if not exists public.review_cards (
   foreign key (course_id, user_id)
     references public.courses(id, user_id) on delete cascade,
   foreign key (lesson_id, course_id, user_id)
-    references public.lessons(id, course_id, user_id) on delete set null
+    references public.lessons(id, course_id, user_id) on delete cascade
 );
 
 create table if not exists public.resources (
