@@ -1,67 +1,51 @@
-const APP_VERSION = "1.0.0";
-
-const versionElement = document.querySelector("#app-version");
-const connectionElement = document.querySelector("#connection-status");
-const updateBanner = document.querySelector("#update-banner");
-const updateButton = document.querySelector("#update-button");
-
-versionElement.textContent = `v${APP_VERSION}`;
-
-function updateConnectionStatus() {
-  connectionElement.textContent = navigator.onLine ? "Conectado" : "Modo offline";
-}
-
-window.addEventListener("online", updateConnectionStatus);
-window.addEventListener("offline", updateConnectionStatus);
-updateConnectionStatus();
-
-let refreshingAfterUpdate = false;
-let waitingWorker = null;
-
-function showUpdate(worker) {
-  waitingWorker = worker;
-  updateBanner.hidden = false;
-}
-
-updateButton.addEventListener("click", () => {
-  if (!waitingWorker) return;
-  updateButton.disabled = true;
-  updateButton.textContent = "Atualizando…";
-  waitingWorker.postMessage({ type: "SKIP_WAITING" });
+(() => {
+"use strict";
+const KEY="estudos-ava-v2", VERSION="2.0.0";
+const STATUS={planned:["Não iniciado","muted"],studying:["Estudando","blue"],practicing:["Praticando","violet"],learned:["Aprendido","green"],mastered:["Consolidado","green"],review:["Em revisão","amber"]};
+const LABEL={inicio:"Visão geral",cursos:"Meus cursos",revisoes:"Revisões",biblioteca:"Biblioteca",progresso:"Meu progresso"};
+const $=(s,r=document)=>r.querySelector(s), id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7), today=()=>new Date().toISOString().slice(0,10);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const dateAdd=(d,n)=>{let x=new Date(d+"T12:00:00");x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)};
+let data=load(), view="inicio", courseOpen=null, revealed=false, toastTimer;
+function load(){try{let x=JSON.parse(localStorage.getItem(KEY));if(x?.schemaVersion===2&&Array.isArray(x.courses))return x}catch(e){console.warn(e)}return{schemaVersion:2,courses:[],cards:[],resources:[]}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(data));$("#review-count").textContent=due().length}catch(e){toast("Falha ao salvar. Exporte um backup e libere espaço.")}}
+function toast(s){let el=$("#toast");el.textContent=s;el.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove("show"),2600)}
+function lessons(){return data.courses.flatMap(c=>(c.modules||[]).flatMap(m=>(m.lessons||[]).map(l=>({...l,courseId:c.id,courseTitle:c.title,moduleId:m.id}))))}
+function due(){return data.cards.filter(c=>!c.due||c.due<=today()).sort((a,b)=>(a.due||"").localeCompare(b.due||""))}
+function setView(v){view=v;courseOpen=null;document.querySelectorAll("[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view===v));$("#page-context").textContent=LABEL[v];render()}
+function render(){let root=$("#app-content");$("#review-count").textContent=due().length;root.innerHTML=({inicio:dashboard,cursos:()=>courseOpen?coursePage(courseOpen):coursesPage(),revisoes:reviews,biblioteca:library,progresso:progress}[view]||dashboard)();bindStatus()}
+function stat(label,value,icon,v){return '<button class="stat" data-view="'+v+'"><small>'+icon+' '+label+'</small><b>'+value+'</b><em>Acompanhar →</em></button>'}
+function empty(title,desc,action,label){return '<div class="empty"><span>✧</span><h2>'+title+'</h2><p>'+desc+'</p><button class="primary" data-action="'+action+'">'+label+'</button></div>'}
+function courseRow(c){let ls=(c.modules||[]).flatMap(m=>m.lessons||[]),done=ls.filter(l=>["learned","mastered"].includes(l.status)).length,p=ls.length?Math.round(done/ls.length*100):0;return '<button class="course-row" data-course="'+c.id+'"><b class="course-initial">'+esc(c.title.slice(0,1).toUpperCase())+'</b><span><strong>'+esc(c.title)+'</strong><small>'+ls.length+' conteúdos · '+esc(c.description||"Sem descrição")+'</small><i class="bar"><u style="width:'+p+'%"></u></i></span><em>'+p+'%</em></button>'}
+function dashboard(){let ls=lessons(),d=due(),recent=data.courses.slice(-3).reverse();return '<div class="hero"><div><small class="eyebrow">APRENDIZAGEM EM MOVIMENTO</small><h1>Seu conhecimento<br><span>em construção.</span></h1><p>Organize cursos, estude por etapas e acompanhe o que realmente aprendeu.</p></div><div class="hero-mark">E<span>✦</span></div></div><div class="stats">'+stat("Cursos",data.courses.length,"▤","cursos")+stat("Conteúdos",ls.length,"▧","cursos")+stat("Aprendidos",ls.filter(l=>["learned","mastered"].includes(l.status)).length,"✓","progresso")+stat("Revisões de hoje",d.length,"↻","revisoes")+'</div><div class="columns"><section class="panel"><header><div><small class="eyebrow">SUA SALA DE AULA</small><h2>Meus cursos</h2></div><button class="link" data-view="cursos">Ver todos →</button></header>'+(recent.length?recent.map(courseRow).join(""):empty("Seu primeiro curso começa aqui","Crie um curso para organizar disciplinas, módulos e conteúdos.","new-course","Criar curso"))+'</section><section class="panel"><header><div><small class="eyebrow">MEMÓRIA ATIVA</small><h2>Revisões</h2></div><b class="pill">'+d.length+'</b></header>'+(d.length?'<div class="focus"><small>PRÓXIMA PERGUNTA</small><h3>'+esc(d[0].front)+'</h3><p>'+esc(d[0].courseTitle||"Cartão de estudo")+'</p><button class="primary wide" data-view="revisoes">Iniciar revisão</button></div>':'<div class="quiet"><b>✧</b><strong>Nenhuma revisão pendente</strong><p>Crie cartões para revisar conteúdos com recuperação ativa.</p><button class="secondary" data-action="new-card">Criar cartão</button></div>')+'</section></div><div class="callout"><div><b>Aprender também é praticar</b><p>Transforme conceitos em perguntas e tente recuperá-los sem consultar suas anotações.</p></div><button class="secondary" data-action="new-card">＋ Criar cartão</button></div>'}
+function coursesPage(){return '<div class="page-title"><div><small class="eyebrow">SUA SALA DE AULA</small><h1>Meus cursos</h1><p>Disciplinas, trilhas pessoais, módulos e conteúdos.</p></div><button class="primary" data-action="new-course">＋ Criar curso</button></div>'+(data.courses.length?'<div class="course-grid">'+data.courses.map(c=>{let ls=(c.modules||[]).flatMap(m=>m.lessons||[]),n=ls.filter(l=>["learned","mastered"].includes(l.status)).length,p=ls.length?Math.round(n/ls.length*100):0;return '<article class="course-card"><button data-course="'+c.id+'"><div class="cover"><b>'+esc(c.title.slice(0,1).toUpperCase())+'</b><small>'+esc(c.category||"CURSO")+'</small></div><div class="course-body"><strong>'+esc(c.title)+'</strong><p>'+esc(c.description||"Organize seu percurso de aprendizagem.")+'</p><small>'+(c.modules||[]).length+' módulos · '+ls.length+' conteúdos</small><i class="bar"><u style="width:'+p+'%"></u></i><small>'+p+'% aprendidos</small></div></button><button class="delete" data-delete-course="'+c.id+'" aria-label="Excluir curso">⋯</button></article>'}).join("")+'</div>':empty("Nenhum curso cadastrado","Crie uma sala de aprendizagem para começar a estruturar seus estudos.","new-course","Criar curso"))}
+function coursePage(cid){let c=data.courses.find(x=>x.id===cid);if(!c){courseOpen=null;return coursesPage()}let ms=c.modules||[],ls=ms.flatMap(m=>m.lessons||[]);return '<div class="crumb"><button data-view="cursos">Meus cursos</button> / '+esc(c.title)+'</div><div class="page-title"><div><small class="eyebrow">'+esc(c.category||"CURSO")+'</small><h1>'+esc(c.title)+'</h1><p>'+esc(c.description||"Seu percurso de aprendizagem.")+'</p></div><button class="secondary" data-action="new-module" data-course="'+cid+'">＋ Módulo</button></div><div class="summary"><span><b>'+ms.length+'</b> módulos</span><span><b>'+ls.length+'</b> conteúdos</span><span><b>'+ls.filter(l=>["learned","mastered"].includes(l.status)).length+'</b> aprendidos</span><button class="link" data-action="new-lesson" data-course="'+cid+'">＋ Conteúdo</button></div>'+(ms.length?ms.map((m,i)=>'<section class="module"><header><div><small>MÓDULO '+String(i+1).padStart(2,"0")+'</small><h2>'+esc(m.title)+'</h2></div><button class="link" data-action="new-lesson" data-course="'+cid+'" data-module="'+m.id+'">＋ Conteúdo</button></header>'+(m.lessons?.length?m.lessons.map(l=>lessonRow(l,cid,m.id)).join(""):'<p class="muted">Este módulo ainda não possui conteúdos.</p>')+'</section>').join(""):empty("Organize o curso em módulos","Módulos agrupam conteúdos relacionados em uma sequência didática.","new-module","Criar módulo"))+'<p class="delete-line"><button class="link danger" data-delete-course="'+cid+'">Excluir este curso</button></p>'}
+function lessonRow(l,cid,mid){let s=STATUS[l.status]||STATUS.planned;return '<article class="lesson"><span class="marker '+s[1]+'">•</span><div><strong>'+esc(l.title)+'</strong><p>'+esc(l.description||"Conteúdo de aprendizagem")+'</p>'+(l.notes?'<blockquote>'+esc(l.notes)+'</blockquote>':'')+'<div class="lesson-tools"><select data-status="'+l.id+'" data-course="'+cid+'" data-module="'+mid+'">'+Object.entries(STATUS).map(([k,v])=>'<option value="'+k+'"'+(l.status===k?" selected":"")+'>'+v[0]+'</option>').join("")+'</select><button class="link" data-action="edit-lesson" data-course="'+cid+'" data-module="'+mid+'" data-lesson="'+l.id+'">Editar</button><button class="link" data-action="new-card" data-course="'+cid+'" data-lesson="'+l.id+'">＋ Cartão</button></div></div></article>'}
+function reviews(){let cards=due(),all=data.cards.length;if(!cards.length)return '<div class="page-title"><div><small class="eyebrow">RECUPERAÇÃO ATIVA</small><h1>Revisões</h1><p>Tente lembrar antes de consultar a resposta.</p></div><button class="primary" data-action="new-card">＋ Novo cartão</button></div>'+empty(all?"Você está em dia":"Sua memória ativa começa aqui",all?"Não há cartões vencidos hoje.":"Crie perguntas e respostas para revisar seus conteúdos.","new-card","Criar cartão");let c=cards[0];return '<div class="page-title"><div><small class="eyebrow">RECUPERAÇÃO ATIVA</small><h1>Revisões</h1><p>Recupere o conhecimento da memória antes de revelar a resposta.</p></div><span class="pill">'+cards.length+' pendentes</span></div><div class="review"><div class="review-meta"><span>Cartão 1 de '+cards.length+'</span><span>'+all+' no total</span></div><article class="review-card"><small>'+esc(c.courseTitle||"REVISÃO")+'</small><p>PERGUNTA</p><h2>'+esc(c.front)+'</h2>'+(revealed?'<div class="answer"><p>RESPOSTA</p>'+esc(c.back).replace(/\n/g,"<br>")+'</div><p>COMO FOI SUA LEMBRANÇA?</p><div class="ratings"><button data-rate="again" data-card="'+c.id+'">Não lembrei</button><button data-rate="hard" data-card="'+c.id+'">Difícil</button><button data-rate="good" data-card="'+c.id+'">Lembrei</button><button data-rate="easy" data-card="'+c.id+'">Fácil</button></div>':'<button class="primary" data-action="reveal">Revelar resposta</button>')+'</article><p class="hint">A classificação ajusta o intervalo até a próxima revisão. Não é uma nota.</p></div>'}
+function library(){return '<div class="page-title"><div><small class="eyebrow">RECURSOS DE APRENDIZAGEM</small><h1>Biblioteca</h1><p>Links, livros, vídeos, documentos e referências.</p></div><button class="primary" data-action="new-resource">＋ Adicionar recurso</button></div>'+(data.resources.length?'<div class="resources">'+data.resources.map(r=>'<article><b>↗</b><div><strong>'+esc(r.title)+'</strong><small>'+esc(r.type)+' · '+esc(r.courseTitle||"Sem curso")+'</small><p>'+esc(r.description||r.url)+'</p></div>'+(r.url?'<a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">Abrir ↗</a>':'')+'<button class="link danger" data-delete-resource="'+r.id+'">Excluir</button></article>').join("")+'</div>':empty("Biblioteca vazia","Adicione referências que complementam seus conteúdos e atividades.","new-resource","Adicionar recurso"))}
+function progress(){let ls=lessons(),total=ls.length||1;return '<div class="page-title"><div><small class="eyebrow">SEU DESENVOLVIMENTO</small><h1>Meu progresso</h1><p>Os estados são registros pessoais, não uma medição automática de domínio.</p></div></div><section class="panel"><header><div><small class="eyebrow">MAPA DE APRENDIZAGEM</small><h2>Distribuição dos conteúdos</h2></div><span class="pill">'+ls.length+' conteúdos</span></header>'+(ls.length?Object.entries(STATUS).map(([k,v])=>{let n=ls.filter(l=>l.status===k).length;return '<div class="progress-row"><span>'+v[0]+'</span><b>'+n+'</b><i class="bar"><u class="'+v[1]+'" style="width:'+n/total*100+'%"></u></i></div>'}).join(""):'<p class="muted">Adicione cursos e conteúdos para visualizar seu progresso.</p>')+'</section><section class="panel"><header><div><small class="eyebrow">POR CURSO</small><h2>Visão detalhada</h2></div></header>'+(data.courses.length?data.courses.map(c=>{let a=(c.modules||[]).flatMap(m=>m.lessons||[]),n=a.filter(l=>["learned","mastered"].includes(l.status)).length;return '<div class="course-progress"><span><strong>'+esc(c.title)+'</strong><small>'+n+' de '+a.length+' aprendidos</small></span><b>'+(a.length?Math.round(n/a.length*100):0)+'%</b></div>'}).join(""):'<p class="muted">Nenhum curso cadastrado.</p>')+'</section>'}
+function bindStatus(){document.querySelectorAll("[data-status]").forEach(el=>el.addEventListener("change",()=>{let c=data.courses.find(x=>x.id===el.dataset.course),m=c?.modules.find(x=>x.id===el.dataset.module),l=m?.lessons.find(x=>x.id===el.dataset.status);if(l){l.status=el.value;l.updatedAt=new Date().toISOString();save();render();toast("Estado atualizado.")}}))}
+function dialog(title,fields,saveFn){let d=$("#app-dialog"),root=$("#dialog-content");root.innerHTML='<small class="eyebrow">ESTUDOS</small><h2>'+title+'</h2><form id="edit-form">'+fields.map(f=>'<label>'+f.label+(f.type==="textarea"?'<textarea name="'+f.name+'" rows="3" '+(f.required?"required":"")+' placeholder="'+esc(f.placeholder||"")+'">'+esc(f.value||"")+'</textarea>':f.type==="select"?'<select name="'+f.name+'">'+f.options.map(o=>'<option value="'+esc(o.value)+'"'+(o.value===f.value?" selected":"")+'>'+esc(o.label)+'</option>').join("")+'</select>':'<input name="'+f.name+'" type="'+(f.type||"text")+'" value="'+esc(f.value||"")+'" placeholder="'+esc(f.placeholder||"")+'" '+(f.required?"required":"")+'>')+'</label>').join("")+'<div class="dialog-actions"><button type="button" class="secondary" data-action="close">Cancelar</button><button class="primary">Salvar</button></div></form>';$("#edit-form").addEventListener("submit",e=>{e.preventDefault();saveFn(Object.fromEntries(new FormData(e.currentTarget)));d.close();render()});d.showModal()}
+function newCourse(){dialog("Criar curso",[{name:"title",label:"Nome do curso",required:true,placeholder:"Ex.: Estrutura de Dados"},{name:"category",label:"Área",placeholder:"Ex.: Ciência da Computação"},{name:"description",label:"Descrição",type:"textarea",placeholder:"O que você pretende aprender?"}],v=>{data.courses.push({id:id(),title:v.title.trim(),category:v.category.trim(),description:v.description.trim(),createdAt:new Date().toISOString(),modules:[]});save();toast("Curso criado.")})}
+function newModule(cid){let c=data.courses.find(x=>x.id===cid);if(!c)return;dialog("Novo módulo",[{name:"title",label:"Nome do módulo",required:true}],v=>{c.modules.push({id:id(),title:v.title.trim(),lessons:[]});save()})}
+function newLesson(cid,mid,lid){let c=data.courses.find(x=>x.id===cid),old=lid?c?.modules.flatMap(m=>m.lessons.map(l=>({l,m}))).find(x=>x.l.id===lid):null;if(!c)return;dialog(old?"Editar conteúdo":"Adicionar conteúdo",[{name:"title",label:"Título",required:true,value:old?.l.title},{name:"description",label:"Objetivo de aprendizagem",type:"textarea",value:old?.l.description,placeholder:"O que deverá compreender ou conseguir fazer?"},{name:"notes",label:"Anotações",type:"textarea",value:old?.l.notes},{name:"status",label:"Estado",type:"select",value:old?.l.status||"planned",options:Object.entries(STATUS).map(([k,v])=>({value:k,label:v[0]}))}],v=>{if(old)Object.assign(old.l,{title:v.title.trim(),description:v.description.trim(),notes:v.notes.trim(),status:v.status});else{let m=c.modules.find(x=>x.id===mid)||c.modules[0];if(!m){m={id:id(),title:"Módulo 1",lessons:[]};c.modules.push(m)}m.lessons.push({id:id(),title:v.title.trim(),description:v.description.trim(),notes:v.notes.trim(),status:v.status})}save();toast("Conteúdo salvo.")})}
+function newCard(cid,lid){let cs=data.courses.map(c=>({value:c.id,label:c.title})),ls=lessons().filter(l=>!cid||l.courseId===cid).map(l=>({value:l.id,label:l.title}));dialog("Cartão de revisão",[{name:"courseId",label:"Curso",type:"select",value:cid||cs[0]?.value||"",options:[{value:"",label:"Sem curso"},...cs]},{name:"lessonId",label:"Conteúdo",type:"select",value:lid||ls[0]?.value||"",options:[{value:"",label:"Sem conteúdo"},...ls]},{name:"front",label:"Pergunta",type:"textarea",required:true},{name:"back",label:"Resposta",type:"textarea",required:true}],v=>{let c=data.courses.find(x=>x.id===v.courseId);data.cards.push({id:id(),courseId:v.courseId,courseTitle:c?.title||"",lessonId:v.lessonId,front:v.front.trim(),back:v.back.trim(),due:today(),interval:0,repetitions:0});save();toast("Cartão criado.")})}
+function newResource(){dialog("Adicionar recurso",[{name:"title",label:"Nome",required:true},{name:"type",label:"Tipo",type:"select",value:"Artigo",options:["Artigo","Vídeo","Livro","Documentação","PDF","Outro"].map(x=>({value:x,label:x}))},{name:"url",label:"URL",type:"url",placeholder:"https://..."},{name:"description",label:"Observações",type:"textarea"},{name:"courseId",label:"Curso",type:"select",value:"",options:[{value:"",label:"Sem curso"},...data.courses.map(c=>({value:c.id,label:c.title}))]}],v=>{let c=data.courses.find(x=>x.id===v.courseId);data.resources.push({id:id(),title:v.title.trim(),type:v.type,url:v.url.trim(),description:v.description.trim(),courseId:v.courseId,courseTitle:c?.title||""});save();toast("Recurso adicionado.")})}
+function rate(cid,r){let c=data.cards.find(x=>x.id===cid);if(!c)return;let days={again:1,hard:Math.max(1,Math.round((c.interval||1)*1.2)),good:c.interval?Math.max(2,Math.round(c.interval*2.2)):3,easy:c.interval?Math.max(4,Math.round(c.interval*3.5)):7};c.interval=days[r];c.repetitions++;c.due=dateAdd(today(),days[r]);c.lastReviewed=today();save();revealed=false;render();toast("Próxima revisão: "+new Date(c.due+"T12:00:00").toLocaleDateString("pt-BR"))}
+function exportData(){let blob=new Blob([JSON.stringify({...data,exportedAt:new Date().toISOString()},null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="estudos-backup-"+today()+".json";a.click();URL.revokeObjectURL(url);toast("Backup exportado.")}
+function importData(file){let reader=new FileReader();reader.onload=()=>{try{let x=JSON.parse(reader.result);if(x.schemaVersion!==2||!Array.isArray(x.courses)||!Array.isArray(x.cards)||!Array.isArray(x.resources))throw Error("Formato de backup inválido");if(!confirm("A importação substituirá os dados atuais. Continuar?"))return;data=x;save();setView("inicio");toast("Backup importado.")}catch(e){toast("Erro ao importar: "+e.message)}};reader.readAsText(file)}
+document.addEventListener("click",e=>{
+let v=e.target.closest("[data-view]");if(v){setView(v.dataset.view);return}
+let c=e.target.closest("[data-course]");if(c){courseOpen=c.dataset.course;view="cursos";document.querySelectorAll("[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view==="cursos"));$("#page-context").textContent="Meus cursos";render();return}
+let del=e.target.closest("[data-delete-course]");if(del){if(!confirm("Excluir este curso e cartões vinculados?"))return;let x=del.dataset.deleteCourse;data.courses=data.courses.filter(c=>c.id!==x);data.cards=data.cards.filter(c=>c.courseId!==x);data.resources=data.resources.filter(r=>r.courseId!==x);courseOpen=null;save();render();return}
+let dr=e.target.closest("[data-delete-resource]");if(dr){data.resources=data.resources.filter(r=>r.id!==dr.dataset.deleteResource);save();render();return}
+let r=e.target.closest("[data-rate]");if(r){rate(r.dataset.card,r.dataset.rate);return}
+let a=e.target.closest("[data-action]");if(!a)return;let t=a.dataset.action;
+if(t==="new-course")newCourse();if(t==="new-module")newModule(a.dataset.course||courseOpen);if(t==="new-lesson")newLesson(a.dataset.course||courseOpen,a.dataset.module);if(t==="edit-lesson")newLesson(a.dataset.course,a.dataset.module,a.dataset.lesson);if(t==="new-card")newCard(a.dataset.course,a.dataset.lesson);if(t==="new-resource")newResource();if(t==="reveal"){revealed=true;render()}if(t==="export")exportData();if(t==="import")$("#import-file").click();if(t==="close")$("#app-dialog").close()
 });
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", async () => {
-    try {
-      const registration = await navigator.serviceWorker.register("./service-worker.js", {
-        scope: "./",
-        updateViaCache: "none"
-      });
-
-      if (registration.waiting && navigator.serviceWorker.controller) {
-        showUpdate(registration.waiting);
-      }
-
-      registration.addEventListener("updatefound", () => {
-        const installingWorker = registration.installing;
-        if (!installingWorker) return;
-
-        installingWorker.addEventListener("statechange", () => {
-          if (installingWorker.state === "installed" && navigator.serviceWorker.controller) {
-            showUpdate(installingWorker);
-          }
-        });
-      });
-
-      await registration.update();
-    } catch (error) {
-      console.error("Não foi possível registrar a atualização offline:", error);
-    }
-  });
-
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (refreshingAfterUpdate) return;
-    refreshingAfterUpdate = true;
-    window.location.reload();
-  });
-}
+$("#import-file").addEventListener("change",e=>{if(e.target.files[0])importData(e.target.files[0]);e.target.value=""});
+function connection(){let online=navigator.onLine;$("#connection-status").textContent=online?"Conectado":"Modo offline";$("#connection-dot").classList.toggle("offline",!online)}
+window.addEventListener("online",connection);window.addEventListener("offline",connection);
+$("#today-label").textContent=new Date().toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"short"});$("#app-version").textContent="v"+VERSION;connection();render();
+if("serviceWorker"in navigator)addEventListener("load",async()=>{try{let r=await navigator.serviceWorker.register("./service-worker.js",{scope:"./",updateViaCache:"none"});if(r.waiting&&navigator.serviceWorker.controller)r.waiting.postMessage({type:"SKIP_WAITING"});await r.update()}catch(e){console.warn(e)}});
+})();

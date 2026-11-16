@@ -1,32 +1,24 @@
 name: CI
-
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-main
   cancel-in-progress: true
-
 jobs:
   validate:
-    name: Validate PWA
+    name: Validate Estudos AVA
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
-
       - name: Check required files
         run: |
           test -f index.html
@@ -35,12 +27,12 @@ jobs:
           test -f service-worker.js
           test -f manifest.webmanifest
           test -f icons/icon.svg
-
+          test -f docs/AVA-ARQUITETURA.md
       - name: Validate JavaScript syntax
         run: |
           node --check app.js
           node --check service-worker.js
-
-      - name: Validate web manifest
-        run: |
-          node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8')); if (!m.name || !m.start_url || !m.icons?.length) process.exit(1); console.log('Manifest válido:', m.name)"
+      - name: Validate manifest
+        run: node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8')); if (!m.name || !m.start_url || !m.icons?.length) process.exit(1)"
+      - name: Validate AVA structure
+        run: node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); const j=fs.readFileSync('app.js','utf8'); for(const id of ['app-content','app-dialog','import-file','review-count']) if(!h.includes('id=\"'+id+'\"')) throw Error(id); for(const fn of ['dashboard','coursesPage','coursePage','reviews','library','progress','exportData','importData']) if(!j.includes('function '+fn)) throw Error(fn)"
