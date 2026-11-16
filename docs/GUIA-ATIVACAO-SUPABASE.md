@@ -1,128 +1,111 @@
-# Guia de ativação da infraestrutura Supabase
+# Guia operacional do Supabase — AVA Estudos
 
-**Objetivo:** preparar o projeto Supabase e os segredos do GitHub para habilitar posteriormente a implantação automatizada de migrações.
+**Projeto Supabase:** `bkhrxosiumviprnhlbim`  
+**Repositório:** [MaluquinhoDev/Estudos](https://github.com/MaluquinhoDev/Estudos)  
+**CLI fixada no CI:** 3.0.0
 
-> Este guia não pede que credenciais sejam enviadas por chat, commitadas ou colocadas no código. Segredos devem ser inseridos diretamente nos painéis oficiais.
+Este guia descreve o estado inicial da integração e o procedimento seguro para administrar o banco. A aplicação PWA ainda utiliza localStorage; publicar o esquema não sincroniza automaticamente os dados locais nem conecta o frontend ao Supabase.
 
-## 1. Criar o projeto Supabase
+## 1. Arquivos versionados
 
-1. Acesse https://supabase.com/dashboard
-2. Entre na sua conta ou crie uma.
-3. Clique em **New project**.
-4. Escolha a organização.
-5. Defina um nome para o projeto, por exemplo `ava-estudos`.
-6. Crie uma senha forte para o banco e guarde-a em um gerenciador de senhas.
-7. Escolha a região mais próxima dos usuários.
-8. Aguarde a criação do projeto.
+- `supabase/config.toml`: configuração do projeto CLI.
+- `supabase/migrations/`: histórico SQL versionado.
+- `.github/workflows/supabase-deploy.yml`: implantação manual e controlada.
+- `docs/AVA-ARQUITETURA-ALVO.md`: arquitetura maior do AVA.
 
-O identificador do projeto (Project Reference / Project ID) aparece na URL do painel:
+A migração inicial cria as tabelas `profiles`, `courses`, `modules`, `lessons`, `review_cards` e `resources`. Os IDs dos cursos, módulos, conteúdos, cartões e recursos são TEXT para manter compatibilidade com os identificadores gerados atualmente pelo PWA. Todas as tabelas privadas têm RLS e políticas de propriedade por `auth.uid()`.
 
-`https://supabase.com/dashboard/project/SEU_PROJECT_REF`
+## 2. Secrets necessários no GitHub
 
-Não confunda o Project Ref com a URL completa.
+Em **Settings → Secrets and variables → Actions**, cadastre:
 
-## 2. Obter URL e chave pública
-
-1. Abra o projeto.
-2. Acesse **Connect** ou **Settings → API Keys**, conforme a interface atual.
-3. Copie a **Project URL**.
-4. Copie a chave **Publishable**, normalmente iniciada por `sb_publishable_`.
-
-Esses dois valores são destinados à configuração do cliente. A chave publishable não substitui autenticação nem políticas RLS.
-
-Não use uma chave `sb_secret_` no PWA. Não use a senha do banco no navegador.
-
-## 3. Criar token para o GitHub Actions
-
-1. Abra https://supabase.com/dashboard/account/tokens
-2. Crie um Personal Access Token com nome identificável, por exemplo `github-ava-deploy`.
-3. Restrinja as permissões ao mínimo necessário para o projeto.
-4. Para o comando `supabase link`, a documentação exige leitura de Project Settings, API Keys e API Key Secrets.
-5. Copie o token uma única vez e mantenha-o privado.
-
-A permissão do token deve ser revisada na documentação vigente do Supabase. Não publique o token em Issues, Pull Requests, arquivos ou logs.
-
-## 4. Cadastrar segredos no GitHub
-
-1. Abra https://github.com/MaluquinhoDev/Estudos
-2. Entre em **Settings**.
-3. Na barra lateral, abra **Secrets and variables → Actions**.
-4. Selecione **New repository secret**.
-5. Cadastre os nomes abaixo, um por vez.
-
-| Nome do secret | Valor |
+| Nome | Conteúdo |
 |---|---|
-| `SUPABASE_ACCESS_TOKEN` | Personal Access Token criado no Supabase |
-| `SUPABASE_PROJECT_ID` | Project Ref do projeto |
-| `SUPABASE_DB_PASSWORD` | Senha do banco definida na criação do projeto |
+| `SUPABASE_ACCESS_TOKEN` | Personal Access Token do Supabase |
+| `SUPABASE_PROJECT_ID` | `bkhrxosiumviprnhlbim` |
+| `SUPABASE_DB_PASSWORD` | Senha do banco do projeto |
 
-A URL e a chave publishable não são segredos privilegiados. Elas serão configuradas na aplicação quando a integração de frontend for implementada. Não adicionar `SUPABASE_SECRET_KEY` ao frontend.
+Não coloque tokens, senhas ou chaves secret em arquivos, commits, Issues, logs ou no frontend. Credenciais que já tenham sido publicadas em conversas devem ser revogadas e substituídas.
 
-## 5. Criar a primeira migração com segurança
+## 3. Preparação no computador
 
-A estrutura de migrações deve ser versionada no repositório em `supabase/migrations/`.
-
-No computador de desenvolvimento, com Supabase CLI instalado:
+Instale Node.js e use a CLI fixada pelo projeto:
 
 ```bash
-supabase --version
-supabase init
-supabase login
-supabase link --project-ref SEU_PROJECT_REF
+npx supabase@3.0.0 --version
+npx supabase@3.0.0 login
+npx supabase@3.0.0 link --project-ref bkhrxosiumviprnhlbim
 ```
 
-Antes de criar tabelas em um projeto que já tenha estrutura no painel, inspecione e sincronize o esquema existente conforme a documentação:
+Não é necessário iniciar Docker ou o banco local para executar a CLI contra o projeto hospedado.
+
+## 4. Inspecionar o banco remoto antes da primeira migração
+
+A primeira migração só deve ser aplicada depois de verificar que o esquema remoto não possui tabelas preexistentes que colidam com o modelo AVA.
 
 ```bash
-supabase db pull --remote
+npx supabase@3.0.0 migration list --remote
+npx supabase@3.0.0 db dump --remote
 ```
 
-Crie novas alterações com migrações versionadas:
+A saída do dump deve ser guardada localmente, fora do repositório, como registro/backup. Revise o esquema e faça backup pelo painel antes de qualquer alteração de produção.
+
+Se o projeto já tiver tabelas ou histórico de migrações, não execute a migração inicial sem reconciliar o esquema remoto com o histórico versionado. Não use `db reset --remote` em produção.
+
+## 5. Revisar e aplicar migrações
+
+Pré-visualize:
 
 ```bash
-supabase migration new nome_da_alteracao
+npx supabase@3.0.0 db push --dry-run --remote
 ```
 
-Teste localmente antes de publicar. Não execute migrações destrutivas em produção sem backup e revisão.
+Aplique somente depois de revisar o plano:
 
-## 6. Ativar a implantação automatizada
+```bash
+npx supabase@3.0.0 db push --yes --remote
+```
 
-O workflow do repositório usa os seguintes secrets:
+A CLI v3 usa o banco local como padrão para comandos de banco. O sinalizador `--remote` é obrigatório para deixar explícito que o destino é o projeto hospedado. Em automação não interativa, `--yes` confirma a alteração remota.
 
-- `SUPABASE_ACCESS_TOKEN`
-- `SUPABASE_PROJECT_ID`
-- `SUPABASE_DB_PASSWORD`
+## 6. GitHub Actions
 
-Depois que esses segredos existirem e houver migrações revisadas em `supabase/migrations/`, o workflow poderá vincular o projeto e executar `supabase db push --yes --remote`.
+O workflow `.github/workflows/supabase-deploy.yml` está configurado para execução manual por segurança durante a implantação inicial. Ele:
 
-A CLI v3 exige confirmação explícita em operações remotas; em automação não interativa, use `--yes`. A flag `--remote` é importante para deixar explícito que a operação se destina ao banco remoto.
+1. valida a presença dos três secrets;
+2. verifica a configuração e os arquivos SQL;
+3. instala Supabase CLI 3.0.0;
+4. vincula o projeto;
+5. executa `db push --dry-run --remote`;
+6. aplica as migrações com `db push --yes --remote`.
 
-## 7. Segurança obrigatória antes de conectar o PWA
+Acesse **Actions → Supabase - Validate and deploy database migrations → Run workflow**. O workflow não consegue verificar os valores dos secrets, apenas detectar se estão vazios. Uma execução bem-sucedida é a evidência de que autenticação, vínculo e migração funcionaram.
 
-- Habilitar RLS em todas as tabelas acessíveis pela API.
-- Criar políticas que limitem cada registro ao usuário proprietário.
-- Testar acesso com duas contas diferentes.
-- Não confiar em filtros da interface como controle de segurança.
-- Não expor chave secret, senha do banco ou token pessoal.
-- Não armazenar dados sensíveis desnecessários.
-- Configurar backups e testar restauração.
-- Revisar o Security Advisor do Supabase.
+## 7. Modelo de segurança
 
-## 8. O que ainda não deve ser feito
+- RLS está habilitado nas tabelas privadas.
+- Cada registro de conteúdo inclui `user_id`.
+- As políticas limitam as operações ao usuário autenticado proprietário.
+- A criação de perfil é feita por trigger após o cadastro em Auth.
+- A chave publishable pode ficar no frontend, mas somente com RLS e políticas corretas.
+- Chaves secret/service_role, PAT e senha do banco nunca podem ficar no navegador.
 
-Não criar tabelas definitivas antes de recuperar e examinar o modelo de dados e o código atual do AVA. A migração precisa preservar cursos, módulos, conteúdos, cartões, recursos e progresso já armazenados.
+Depois de aplicar o esquema, teste duas contas diferentes para confirmar que uma não consegue consultar ou alterar os registros da outra.
 
-Não conectar o PWA a uma tabela sem RLS e políticas verificadas.
+## 8. Estado atual e limites
 
-Não executar o primeiro deploy de banco até revisar as migrações e confirmar que o projeto remoto não contém dados que seriam sobrescritos.
+- O esquema SQL está versionado, mas ainda não foi aplicado ao projeto remoto.
+- O workflow está preparado, mas ainda não foi executado.
+- O PWA continua salvando dados em localStorage.
+- Não existe ainda sincronização local/remota, importação automática do backup JSON, login integrado ou configuração da URL/chave publishable no frontend.
+- A migração inicial não importa dados já armazenados no navegador.
+- A migração cria apenas a estrutura de dados inicial; tentativas, respostas, eventos de aprendizagem e domínio adaptativo permanecem etapas futuras.
 
-## 9. Documentação oficial atual
+## 9. Referências oficiais
 
-- Criar e gerenciar projetos: https://supabase.com/dashboard
-- Implantação e branching: https://supabase.com/docs/guides/deployment
-- Gerenciamento de ambientes e GitHub Actions: https://supabase.com/docs/guides/deployment/managing-environments
-- Migrações de banco: https://supabase.com/docs/guides/deployment/database-migrations
-- Chaves de API: https://supabase.com/docs/guides/getting-started/api-keys
-- Tokens pessoais: https://supabase.com/docs/guides/platform/personal-access-tokens
-- Conexão com PostgreSQL: https://supabase.com/docs/guides/database/connecting-to-postgres
-- Secrets do GitHub Actions: https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets
+- [Supabase CLI v3](https://supabase.com/docs/guides/local-development/cli/migrating-to-v3)
+- [Database migrations](https://supabase.com/docs/guides/deployment/database-migrations)
+- [Local development workflow](https://supabase.com/docs/guides/local-development/cli-workflows)
+- [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
+- [API keys](https://supabase.com/docs/guides/getting-started/api-keys)
+- [GitHub Actions secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)
