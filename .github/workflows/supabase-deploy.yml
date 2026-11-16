@@ -1,0 +1,72 @@
+name: Supabase - Deploy database migrations
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-migrations
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Validate and deploy migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check required configuration
+        shell: bash
+        run: |
+          missing=0
+          for name in SUPABASE_ACCESS_TOKEN SUPABASE_PROJECT_ID SUPABASE_DB_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Configure the required secrets using docs/GUIA-ATIVACAO-SUPABASE.md."
+            exit 1
+          fi
+
+      - name: Check migration directory
+        shell: bash
+        run: |
+          if [ ! -d supabase/migrations ]; then
+            echo "::error::supabase/migrations does not exist. Do not deploy an uninitialized schema."
+            exit 1
+          fi
+          if ! find supabase/migrations -maxdepth 1 -type f -name '*.sql' | grep -q .; then
+            echo "::error::No SQL migration files found."
+            exit 1
+          fi
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 3.0.0
+
+      - name: Link Supabase project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Preview remote migrations
+        run: supabase db push --dry-run --remote
+
+      - name: Apply reviewed migrations
+        run: supabase db push --yes --remote
