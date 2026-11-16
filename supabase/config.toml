@@ -1,0 +1,18 @@
+project_id = "bkhrxosiumviprnhlbim"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+# Keep the database version managed by the hosted Supabase project.
+# Do not pin a local Postgres version until it has been verified.
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+enabled = false
