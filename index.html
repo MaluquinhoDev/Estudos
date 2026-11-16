@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101827">
+  <meta name="description" content="Seu espaço de estudos, atualizado automaticamente.">
+  <title>Estudos</title>
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <main class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Estudos, página inicial">
+        <span class="brand-mark" aria-hidden="true">E</span>
+        <span>Estudos</span>
+      </a>
+      <span class="connection-status" id="connection-status">Verificando conexão…</span>
+    </header>
+
+    <section class="hero" aria-labelledby="page-title">
+      <p class="eyebrow">SEU AMBIENTE DE APRENDIZAGEM</p>
+      <h1 id="page-title">Aprender é construir,<br><span>um passo de cada vez.</span></h1>
+      <p class="intro">Uma base simples, rápida e instalada no navegador. As atualizações chegam automaticamente depois de cada publicação.</p>
+      <div class="release-line">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span>Aplicação atualizada pelo GitHub Actions</span>
+      </div>
+    </section>
+
+    <section class="workspace" aria-labelledby="workspace-title">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">PONTO DE PARTIDA</p>
+          <h2 id="workspace-title">Seu espaço de estudos</h2>
+        </div>
+        <span class="version" id="app-version">v1.0.0</span>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card">
+          <span class="card-number">01</span>
+          <h3>Planejamento</h3>
+          <p>Estruture objetivos, etapas e sessões de estudo.</p>
+          <span class="card-state">Base preparada</span>
+        </article>
+        <article class="feature-card">
+          <span class="card-number">02</span>
+          <h3>Materiais</h3>
+          <p>Organize conteúdos e referências em um só lugar.</p>
+          <span class="card-state">Base preparada</span>
+        </article>
+        <article class="feature-card">
+          <span class="card-number">03</span>
+          <h3>Revisões</h3>
+          <p>Construa uma rotina de retomada do conhecimento.</p>
+          <span class="card-state">Base preparada</span>
+        </article>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>Estudos · Aplicação web progressiva</span>
+      <span>Os dados do navegador não são apagados nas atualizações.</span>
+    </footer>
+  </main>
+
+  <aside class="update-banner" id="update-banner" role="status" aria-live="polite" hidden>
+    <div>
+      <strong>Nova versão disponível</strong>
+      <p>Uma atualização foi baixada e está pronta.</p>
+    </div>
+    <button id="update-button" type="button">Atualizar agora</button>
+  </aside>
+</body>
+</html>
