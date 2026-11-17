@@ -1,5 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
-
 const config = {
   supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
   supabaseKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -208,6 +206,7 @@ if (!configured()) {
 } else if (!panel || !dialog || !form || !message || !submit) {
   console.error("PowerSync UI elements are missing from index.html");
 } else {
+  const { createClient } = await import("@supabase/supabase-js");
   supabase = createClient(config.supabaseUrl, config.supabaseKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
