@@ -125,17 +125,25 @@ jobs:
           if (!connector.includes('WRITABLE_TABLES') || !connector.includes('.eq("user_id", user.id)')) {
             throw new Error('Supabase uploads must whitelist tables and constrain mutations to the signed-in user');
           }
-          if (!connector.includes('onConflict: "id"')) {
-            throw new Error('PowerSync uploads must use the table primary key id as the upsert conflict target');
-          }
-          if (connector.includes('onConflict: "id,user_id"')) {
-            throw new Error('Composite id,user_id conflict target is not guaranteed by the PowerSync primary-key model');
+          if (!connector.includes('onConflict: "id,user_id"')) {
+            throw new Error('Supabase uploads must target the actual composite primary key (id,user_id)');
           }
           if (!fs.existsSync('supabase/diagnostics/ava_schema_preflight.sql')) {
             throw new Error('Read-only AVA schema preflight SQL is missing');
           }
           if (!fs.existsSync('supabase/diagnostics/ava_schema_audit.sql')) {
             throw new Error('Read-only detailed AVA schema audit SQL is missing');
+          }
+          const audit = fs.readFileSync('supabase/diagnostics/ava_schema_audit.sql', 'utf8');
+          const preflight = fs.readFileSync('supabase/diagnostics/ava_schema_preflight.sql', 'utf8');
+          if (!audit.includes('WITH ORDINALITY') || !audit.includes('pg_get_constraintdef')) {
+            throw new Error('Foreign-key audit must pair composite columns by ordinal position');
+          }
+          if (!audit.includes('has_table_privilege') || !audit.includes("'GRANT'::text")) {
+            throw new Error('Schema audit must inspect effective anon/authenticated table privileges');
+          }
+          if (!preflight.includes("ARRAY['id','user_id']::text[]")) {
+            throw new Error('Preflight must validate the composite tenant primary keys');
           }
           if (!connector.includes('.select("id")') || !connector.includes('result.data.length !== 1')) {
             throw new Error('PATCH uploads must verify that exactly one owned row was updated before acknowledging the CRUD transaction');
