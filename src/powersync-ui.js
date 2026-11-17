@@ -34,6 +34,11 @@ import {
   saveUserSnapshot
 } from "./powersync/identity.js";
 
+async function waitForAppBridge() {
+  if (window.EstudosBridge) return;
+  await new Promise(resolve => window.addEventListener("estudos:app-ready", resolve, { once: true }));
+}
+
 function hideWorkspace() {
   window.EstudosBridge?.setIdentityPending?.();
 }
@@ -288,6 +293,8 @@ async function authenticate(event) {
     submit.disabled = false;
   }
 }
+
+await waitForAppBridge();
 
 if (!configured()) {
   isolateCurrentWorkspace();
