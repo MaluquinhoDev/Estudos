@@ -161,17 +161,19 @@ Essas integrações só devem ser implementadas quando houver necessidade concre
 
 ## 11. Fases de implementação
 
+Confiabilidade, testes e recuperação são requisitos transversais: começam na fundação e evoluem junto com cada etapa, não ficam concentrados no encerramento.
+
 | Fase | Entrega |
 |---|---|
-| 0 | Recuperar e verificar o estado atual do repositório e dos dados |
-| 1 | Modularizar a aplicação sem alterar comportamento |
-| 2 | Adotar IndexedDB e importar dados locais |
-| 3 | Criar projeto Supabase, autenticação, esquema e RLS |
-| 4 | Implementar sincronização offline/online |
-| 5 | Implementar tentativas, avaliações e eventos |
-| 6 | Implementar domínio, diagnóstico e adaptação |
-| 7 | Adicionar extensões e interoperabilidade |
-| 8 | Completar CI/CD, backup, monitoramento e recuperação |
+| 0 | Diagnóstico, inventário de dados, backup verificável, contratos e testes básicos |
+| 1 | Modularizar a aplicação sem alterar comportamento, com testes de regressão |
+| 2 | Adotar IndexedDB, versionamento, migração localStorage e recuperação local |
+| 3 | Criar projeto Supabase, autenticação, esquema, RLS e testes de isolamento entre usuários |
+| 4 | Implementar sincronização offline/online, outbox, idempotência e resolução de conflitos |
+| 5 | Implementar tentativas, avaliações, respostas e eventos de aprendizagem |
+| 6 | Implementar diagnóstico, domínio por competência e adaptação baseada em evidências |
+| 7 | Adicionar extensões e interoperabilidade (xAPI, LTI e H5P) |
+| 8 | Consolidar CI/CD, monitoramento, backup periódico e testes de restauração |
 
 ## 12. Critérios de aceite
 
@@ -180,9 +182,10 @@ Essas integrações só devem ser implementadas quando houver necessidade concre
 - Sincronização não duplica operações.
 - RLS impede acesso cruzado entre usuários.
 - Migrações são versionadas e reproduzíveis.
-- CI falha diante de regressões.
-- Deploy não executa sem credenciais necessárias.
-- Backup pode ser restaurado em ambiente separado.
+- CI falha diante de regressões e valida migrações em ambiente isolado antes do deploy remoto.
+- RLS é testada com pelo menos dois usuários distintos, incluindo tentativas de leitura e escrita cruzadas.
+- Deploy não executa sem credenciais necessárias e mudanças destrutivas exigem proteção de ambiente/revisão.
+- Backup pode ser restaurado em ambiente separado e a restauração é testada periodicamente.
 - A interface continua leve em hardware modesto.
 
 ## 13. Limites e decisões de segurança
