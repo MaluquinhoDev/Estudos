@@ -6,9 +6,9 @@ const LABEL={inicio:"Visão geral",cursos:"Meus cursos",revisoes:"Revisões",bib
 const $=(s,r=document)=>r.querySelector(s), id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7), today=()=>new Date().toISOString().slice(0,10);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const dateAdd=(d,n)=>{let x=new Date(d+"T12:00:00");x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)};
-let data=load(), view="inicio", courseOpen=null, revealed=false, toastTimer;
+let data=load(), view="inicio", courseOpen=null, revealed=false, toastTimer, saveRevision=0;
 function load(){try{let x=JSON.parse(localStorage.getItem(KEY));if(x?.schemaVersion===2&&Array.isArray(x.courses))return x}catch(e){console.warn(e)}return{schemaVersion:2,courses:[],cards:[],resources:[]}}
-function save(){try{const snapshot=JSON.stringify(data);localStorage.setItem(KEY,snapshot);$("#review-count").textContent=due().length;window.dispatchEvent(new CustomEvent("estudos:data-saved",{detail:JSON.parse(snapshot)}))}catch(e){toast("Falha ao salvar. Exporte um backup e libere espaço.")}}
+function save(){try{const snapshot=JSON.stringify(data);localStorage.setItem(KEY,snapshot);$("#review-count").textContent=due().length;window.dispatchEvent(new CustomEvent("estudos:data-saved",{detail:{snapshot:JSON.parse(snapshot),revision:++saveRevision}}))}catch(e){toast("Falha ao salvar. Exporte um backup e libere espaço.")}}
 function toast(s){let el=$("#toast");el.textContent=s;el.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove("show"),2600)}
 function lessons(){return data.courses.flatMap(c=>(c.modules||[]).flatMap(m=>(m.lessons||[]).map(l=>({...l,courseId:c.id,courseTitle:c.title,moduleId:m.id}))))}
 function due(){return data.cards.filter(c=>!c.due||c.due<=today()).sort((a,b)=>(a.due||"").localeCompare(b.due||""))}
