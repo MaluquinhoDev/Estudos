@@ -20,8 +20,8 @@ let EstudosSchema;
 let SupabasePowerSyncConnector;
 let snapshotTools;
 let syncing = false;
-let suppressLocalEvents = false;
-let applyingPowerSyncChanges = false;
+let suppressLocalEventsForUser = null;
+let applyingPowerSyncChangesForUser = null;
 let syncQueue = Promise.resolve();
 let sessionGeneration = 0;
 import {
@@ -158,14 +158,14 @@ async function startSync(session) {
       merged = snapshotTools.mergeSnapshots(local, remote, session.user.id);
     }
 
-    suppressLocalEvents = true;
+    suppressLocalEventsForUser = userId;
     try {
       await snapshotTools.writeSnapshotToPowerSync(db, merged, userId);
       if (!isCurrentSession()) return;
       persistWorkspaceSnapshot(userId, merged);
       window.EstudosBridge?.replaceSnapshot?.(merged);
     } finally {
-      suppressLocalEvents = false;
+      if (suppressLocalEventsForUser === userId) suppressLocalEventsForUser = null;
     }
 
     if (!isCurrentSession()) return;
@@ -173,9 +173,9 @@ async function startSync(session) {
     window.addEventListener("estudos:data-saved", onLocalDataSaved);
     disposeChangeListener = db.onChange({
       onChange: async () => {
-        if (!isCurrentSession() || applyingPowerSyncChanges) return;
-        applyingPowerSyncChanges = true;
-        suppressLocalEvents = true;
+        if (!isCurrentSession() || applyingPowerSyncChangesForUser === userId) return;
+        applyingPowerSyncChangesForUser = userId;
+        suppressLocalEventsForUser = userId;
         try {
           const latest = await snapshotTools.readPowerSyncSnapshot(db);
           if (!isCurrentSession()) return;
@@ -185,8 +185,8 @@ async function startSync(session) {
           console.error("PowerSync remote update could not be applied:", error);
           showMessage("Atualização recebida, mas a tela não foi atualizada: " + error.message, "error");
         } finally {
-          suppressLocalEvents = false;
-          applyingPowerSyncChanges = false;
+          if (suppressLocalEventsForUser === userId) suppressLocalEventsForUser = null;
+          if (applyingPowerSyncChangesForUser === userId) applyingPowerSyncChangesForUser = null;
         }
       }
     }, { tables: ["courses", "modules", "lessons", "review_cards", "resources"], throttleMs: 350 });
@@ -205,7 +205,7 @@ async function startSync(session) {
 }
 
 function onLocalDataSaved(event) {
-  if (!syncing || suppressLocalEvents) return;
+  if (!syncing || suppressLocalEventsForUser === currentUser?.id) return;
   const snapshot = event.detail;
   const ownerId = currentUser?.id;
   const targetDatabase = database;
