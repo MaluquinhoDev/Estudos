@@ -32,6 +32,7 @@ jobs:
           test -f docs/AVA-ARQUITETURA.md
           test -f docs/PROXIMAS-ETAPAS-ARQUITETURAIS.md
           test -f docs/EXECUCAO-FASE-0.md
+          test -f docs/GUIA-PROXIMAS-ETAPAS-BACKEND.md
           test -f docs/PESQUISA-FRONTEND-E-MOTOR-PEDAGOGICO.md
       - name: Validate architecture roadmap
         run: |
