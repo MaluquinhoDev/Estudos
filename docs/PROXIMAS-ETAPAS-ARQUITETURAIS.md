@@ -212,3 +212,93 @@ Storage, Edge Functions, H5P, LTI e xAPI/LRS entram somente quando o núcleo est
 O AVA estará pronto para ampliar o motor pedagógico quando a interface usar repositórios; SQLite/PowerSync for a persistência local operacional; troca de conta não expuser dados; sincronização incremental não apagar dados por snapshots antigos; conflitos forem detectados; RLS for testada com duas contas; migração e backup tiverem restauração comprovada; e CI validar código, migrations e integração.
 
 **Status:** planejamento derivado da inspeção do código e dos documentos existentes. As etapas são backlog, não funcionalidades já implementadas.
+
+
+---
+
+## 8. Revisão técnica e pesquisa complementar — 17/11/2026
+
+Esta revisão confronta o roadmap com os arquivos atuais e com a documentação oficial de Supabase e PowerSync. Ela atualiza a ordem de execução; não representa funcionalidades já implementadas.
+
+### 8.1 Achados adicionais confirmados no código
+
+1. **A proteção de conta acontece tarde demais para proteger a primeira renderização.** `app.js` executa `load()` imediatamente e lê a chave global `estudos-ava-v2`. A validação de `estudos-ava-owner` acontece depois, em `startSync()`. Portanto, a checagem pode interromper a sincronização, mas não impede que a interface já tenha carregado o estado compartilhado.
+2. **Logout não limpa o estado em memória da interface.** `renderSignedOut()` altera o painel de sincronização, mas não substitui o estado carregado pelo `app.js`. A separação do banco SQLite por nome de arquivo não resolve, sozinha, a separação do estado da interface.
+3. **A fila de snapshots preserva ordem de execução, não atualidade semântica.** `syncQueue` encadeia gravações, mas cada evento carrega uma cópia integral do estado. Um evento antigo que já esteja na fila pode ser aplicado depois de uma alteração mais recente.
+4. **A leitura usada para calcular o snapshot de escrita ocorre antes da transação.** Em `writeSnapshotToPowerSync()`, as consultas de registros existentes acontecem antes de `writeTransaction()`. Uma alteração recebida entre a leitura e a aplicação pode tornar o conjunto de comparação obsoleto.
+5. **Ausência é tratada como exclusão.** O método apaga do SQLite qualquer registro existente que não esteja no snapshot recebido. Isso é perigoso enquanto snapshots completos forem o mecanismo de escrita.
+6. **Os testes atuais não cobrem o risco principal.** Os testes verificam conversão/merge e o conector HTTP simulado, mas não simulam troca de conta, logout, fila fora de ordem, exclusões concorrentes, transações SQLite reais nem políticas RLS executadas no PostgreSQL.
+7. **A CI não garante instalação reproduzível.** O workflow usa `npm install`, e o manifesto apresentado não contém script de testes de banco. A adoção de `npm ci` depende da inclusão e manutenção de um lockfile.
+8. **O workflow Supabase é apenas validador estrutural.** Seu próprio conteúdo declara que não executa migrations no banco remoto. O fluxo de migrações ainda precisa de testes em banco local/temporário.
+
+### 8.2 Ajuste de prioridade
+
+A Etapa 0 deve ser dividida em duas entregas verificáveis, sem misturá-las:
+
+- **0A — isolamento de identidade e interface:** impedir que dados de uma identidade sejam carregados ou renderizados em outra sessão; tratar inicialização, troca de usuário, logout, sessão expirada e falha de inicialização.
+- **0B — integridade de escrita e sincronização:** remover exclusões implícitas, impedir snapshots obsoletos, testar mutações concorrentes e estados de sincronização.
+
+A Etapa 0A vem primeiro porque é uma fronteira de privacidade. A Etapa 0B vem em seguida porque o mecanismo atual pode transformar uma visão antiga do estado em exclusões ou sobrescritas locais/remotas.
+
+### 8.3 Plano de execução revisado
+
+| Ordem | Entrega verificável | Evidência obrigatória |
+|---:|---|---|
+| 1 | Bloqueio de renderização até determinar o contexto de identidade | Teste de inicialização sem sessão, com sessão A e com sessão B |
+| 2 | Estado e armazenamento local separados por usuário | Teste A → logout → B no mesmo navegador, inclusive após recarregar |
+| 3 | Logout/troca de sessão invalidam callbacks, listeners e operações antigas | Testes de corrida A → B e sessão expirada |
+| 4 | Escritas não apagam dados por ausência em snapshot | Teste de exclusão explícita versus snapshot incompleto |
+| 5 | Eventos antigos não vencem gravações mais recentes | Teste determinístico com fila atrasada e versões de estado |
+| 6 | Transações e consultas coerentes no repositório local | Testes com SQLite/PowerSync real, não somente mocks |
+| 7 | Serviços e repositórios extraídos de `app.js` | Testes de domínio sem DOM e regressão da interface |
+| 8 | Interface lê e grava pelo SQLite/PowerSync | Teste offline, reinicialização e restauração |
+| 9 | Mutação incremental e resolução de conflitos | Testes de dois dispositivos e reconexão |
+| 10 | RLS e migrations exercitadas em PostgreSQL de teste | pgTAP + testes pelo cliente Supabase |
+| 11 | Pipeline de banco separado do deploy PWA | CI reproduzível, migrations testadas e ambiente protegido |
+
+### 8.4 Regras de implementação da Etapa 0A
+
+- O bootstrap da interface deve receber um contexto de identidade explícito antes de carregar dados privados.
+- A chave de armazenamento local não pode ser global entre usuários. O namespace deve incluir o identificador autenticado e a versão do formato.
+- Dados legados sem proprietário identificado não devem ser associados automaticamente à conta que entrar primeiro. A migração deve ser explícita, validada e reversível por backup.
+- No logout, a interface deve parar de exibir os dados da sessão anterior imediatamente; isso não significa apagar o banco local daquela identidade.
+- Cada inicialização/troca de sessão deve possuir um identificador de geração. Respostas assíncronas de uma geração anterior não podem atualizar a interface nem gravar no banco da nova sessão.
+- A validação de proprietário deve ser uma defesa adicional, não o mecanismo primário de isolamento.
+
+### 8.5 Regras de implementação da Etapa 0B
+
+- Não executar `DELETE` por diferença entre snapshot recebido e banco local.
+- Exclusões devem ser operações explícitas, identificadas por registro e encaminhadas pela CRUD queue nativa do PowerSync.
+- Não introduzir uma segunda fila paralela sem necessidade demonstrada.
+- Não confiar apenas na ordem da Promise chain como controle de versão. Cada mutação precisa de identidade estável e regra clara de precedência.
+- A reconciliação inicial deve distinguir banco remoto vazio, banco local vazio, dados legados, dados de outro usuário e conflito real.
+- A leitura e a escrita local devem ocorrer em transação coerente; operações recebidas de sincronização não podem ser reexportadas como novas alterações do usuário.
+- Estados visuais devem distinguir: salvo localmente, aguardando envio, sincronizado e erro.
+
+### 8.6 Testes de banco e CI
+
+A documentação oficial do Supabase recomenda testar RLS com pgTAP e também no nível da aplicação, incluindo casos negativos e diferentes papéis. O fluxo oficial de CI usa Supabase CLI, inicia uma instância local e executa `supabase test db`. Assim, a auditoria SQL manual permanece útil, mas não substitui testes automatizados de autorização.
+
+Critérios mínimos:
+- usuário A consegue operar seus próprios registros;
+- usuário A não consegue ler, inserir, atualizar ou excluir registros de B;
+- usuário anônimo não recebe acesso às tabelas privadas;
+- constraints compostas impedem relações entre registros de proprietários diferentes;
+- policies, grants e índices necessários são testados;
+- migrations aplicam em banco vazio e em banco com a versão anterior;
+- a CI não usa credenciais de produção para testes;
+- deploy de produção exige ambiente protegido e aprovação explícita.
+
+Não executar `supabase db reset --remote` em produção: a documentação oficial alerta que o comando destrói e recria o schema remoto. O fluxo de produção deve aplicar migrations pendentes de forma controlada, após validar o estado remoto e o backup.
+
+### 8.7 Fontes oficiais consultadas
+
+- PowerSync — integração Supabase e arquitetura local SQLite/CRUD queue/Sync Streams: https://docs.powersync.com/integration-guides/supabase
+- Supabase — visão geral de testes, pgTAP, testes de aplicação e CI: https://supabase.com/docs/guides/local-development/testing/overview
+- Supabase — testes de políticas RLS: https://supabase.com/docs/guides/database/postgres/row-level-security
+- Supabase — gestão de ambientes e CI/CD: https://supabase.com/docs/guides/deployment/managing-environments
+- Supabase — migrations locais e fluxo de deploy: https://supabase.com/docs/guides/local-development/database-migrations
+
+### 8.8 Limite desta revisão
+
+A revisão confirma riscos pela leitura estática dos arquivos disponíveis. Ela não comprova comportamento do PowerSync Cloud, configuração de Sync Streams implantada, estado atual do banco remoto, nem execução das migrations. Essas evidências exigem testes no ambiente correspondente.
