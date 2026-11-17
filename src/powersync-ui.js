@@ -170,13 +170,13 @@ async function startSync(session) {
       await snapshotTools.writeSnapshotToPowerSync(db, merged, userId);
       if (!isCurrentSession()) return;
       persistWorkspaceSnapshot(userId, merged);
+      localStorage.setItem(OWNER_KEY, userId);
       window.EstudosBridge?.replaceSnapshot?.(merged);
     } finally {
       if (suppressLocalEventsForUser === userId) suppressLocalEventsForUser = null;
     }
 
     if (!isCurrentSession()) return;
-    localStorage.setItem(OWNER_KEY, userId);
     window.addEventListener("estudos:data-saved", onLocalDataSaved);
     disposeChangeListener = db.onChange({
       onChange: async () => {
