@@ -48,7 +48,7 @@ export class SupabasePowerSyncConnector {
             id: operation.id,
             user_id: user.id
           };
-          result = await table.upsert(record, { onConflict: "id,user_id" });
+          result = await table.upsert(record, { onConflict: "id" });
         } else if (operation.op === UpdateType.PATCH) {
           result = await table
             .update({ ...(operation.opData || {}), user_id: user.id })
