@@ -123,7 +123,7 @@ jobs:
           if (connector.includes('service_role') || connector.includes('SUPABASE_DB_PASSWORD')) {
             throw new Error('Privileged database credentials must never be present in the browser connector');
           }
-          if (!migration.includes('TO authenticated')) throw new Error('Authenticated Data API grants are missing');
+          if (!migration.toLowerCase().includes('to authenticated')) throw new Error('Authenticated Data API grants are missing');
           NODE
       - name: Run unit tests
         run: npm test
