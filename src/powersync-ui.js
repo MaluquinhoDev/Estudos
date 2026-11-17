@@ -25,9 +25,12 @@ let suppressLocalEvents = false;
 let syncQueue = Promise.resolve();
 
 function showMessage(text, kind = "info") {
-  if (!message) return;
-  message.textContent = text;
-  message.dataset.kind = kind;
+  if (message) {
+    message.textContent = text;
+    message.dataset.kind = kind;
+  }
+  const status = document.querySelector("#sync-status");
+  if (status) status.textContent = text;
 }
 
 function setPanel(html) {
@@ -75,28 +78,33 @@ async function stopSync() {
 async function startSync(session) {
   if (startingUserId === session.user.id) return;
   startingUserId = session.user.id;
-  await loadPowerSyncModules();
-  const db = createDatabase();
-  connector = new SupabasePowerSyncConnector({
-    supabase,
-    endpoint: config.powersyncUrl
-  });
-
-  await stopSync();
-  const connection = db.connect(connector);
-  syncing = true;
-  connection.catch(error => {
-    console.error("PowerSync connection failed:", error);
-    showMessage("Conexão PowerSync interrompida: " + error.message, "error");
-  });
-  showMessage("Conectando ao banco local e sincronizando…");
-
   try {
+    await loadPowerSyncModules();
+    const db = createDatabase();
+    connector = new SupabasePowerSyncConnector({
+      supabase,
+      endpoint: config.powersyncUrl
+    });
+
+    await stopSync();
+    const connection = db.connect(connector);
+    syncing = true;
+    connection.catch(error => {
+      console.error("PowerSync connection failed:", error);
+      showMessage("Conexão PowerSync interrompida: " + error.message, "error");
+    });
+    showMessage("Conectando ao banco local e sincronizando…");
+
     await db.waitForFirstSync();
     const remote = await snapshotTools.readPowerSyncSnapshot(db);
     const local = window.EstudosBridge?.getSnapshot?.() || {
       schemaVersion: 2, courses: [], cards: [], resources: []
     };
+    const ownerKey = "estudos-ava-owner";
+    const previousOwner = localStorage.getItem(ownerKey);
+    if (previousOwner && previousOwner !== session.user.id && snapshotTools.hasSnapshotData(local)) {
+      throw new Error("Os dados locais pertencem a outra conta. Exporte o backup antes de trocar de usuário e limpe os dados locais para iniciar uma conta diferente.");
+    }
 
     let merged;
     if (!snapshotTools.hasSnapshotData(remote)) {
@@ -115,6 +123,8 @@ async function startSync(session) {
       suppressLocalEvents = false;
     }
 
+    localStorage.setItem(ownerKey, session.user.id);
+    window.removeEventListener("estudos:data-saved", onLocalDataSaved);
     window.addEventListener("estudos:data-saved", onLocalDataSaved);
     showMessage("Sincronização ativa. Dados locais e remotos conciliados.", "success");
   } catch (error) {
@@ -151,7 +161,7 @@ function renderSignedOut() {
 
 function renderSignedIn(user) {
   setPanel('<div class="sync-user"><span class="sync-indicator"></span><span><strong>Conta conectada</strong><small>' +
-    escapeHtml(user.email || user.id) + '</small></span></div><button class="secondary sync-button" id="sync-logout">Sair da conta</button>');
+    escapeHtml(user.email || user.id) + '</small><small id="sync-status">Preparando sincronização…</small></span></div><button class="secondary sync-button" id="sync-logout">Sair da conta</button>');
   document.querySelector("#sync-logout")?.addEventListener("click", async () => {
     await stopSync();
     const { error } = await supabase.auth.signOut();
