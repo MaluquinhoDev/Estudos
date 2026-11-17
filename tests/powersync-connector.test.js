@@ -9,6 +9,10 @@ function makeHarness(rows) {
   const calls = [];
   let completed = false;
   const builder = {
+    upsert(payload, options) {
+      calls.push(["upsert", payload, options]);
+      return Promise.resolve({ data: null, error: null });
+    },
     update(payload) {
       calls.push(["update", payload]);
       return this;
@@ -64,4 +68,41 @@ test("PATCH keeps the CRUD transaction pending when no owned row is updated", as
     /não encontrou exatamente um registro próprio/
   );
   assert.equal(harness.wasCompleted(), false);
+});
+
+
+test("PUT upserts against the actual composite tenant primary key", async () => {
+  const calls = [];
+  let completed = false;
+  const supabase = {
+    auth: {
+      getSession: async () => ({ data: { session: { user } }, error: null })
+    },
+    from: table => ({
+      upsert: async (record, options) => {
+        calls.push({ table, record, options });
+        return { data: null, error: null };
+      }
+    })
+  };
+  const transaction = {
+    crud: [{
+      op: UpdateType.PUT,
+      table: "courses",
+      id: "course-1",
+      opData: { title: "Course", user_id: "untrusted-user" }
+    }],
+    complete: async () => { completed = true; }
+  };
+  const database = { getNextCrudTransaction: async () => transaction };
+  const connector = new SupabasePowerSyncConnector({
+    supabase,
+    endpoint: "https://example.powersync.journeyapps.com"
+  });
+
+  await connector.uploadData(database);
+  assert.equal(completed, true);
+  assert.equal(calls[0].options.onConflict, "id,user_id");
+  assert.equal(calls[0].record.id, "course-1");
+  assert.equal(calls[0].record.user_id, user.id);
 });
