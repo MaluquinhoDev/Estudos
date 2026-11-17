@@ -149,3 +149,45 @@ Mocks continuam úteis, mas não substituem os níveis de integração e banco.
 - Supabase Managing Environments — https://supabase.com/docs/guides/deployment/managing-environments
 
 **Definição de concluído:** todos os testes de identidade e sincronização acima passam nos níveis adequados; nenhuma conclusão depende apenas de inspeção estática.
+
+
+---
+
+## 9. Registro de execução — primeira entrega da Fase 0A
+
+**Implementação publicada:** 17/11/2026.  
+**Escopo concluído nesta entrega:** isolamento do workspace local durante o bootstrap e a troca de identidade.  
+**Escopo ainda aberto:** validação ponta a ponta em navegador com duas contas reais e sincronização PowerSync Cloud.
+
+### Alterações implementadas
+
+- A interface inicia oculta até o app registrar sua ponte de estado e a resolução de identidade terminar. A ordem entre o script clássico e o módulo PowerSync não é presumida: o módulo aguarda explicitamente o evento de prontidão do app.
+- O estado de cada usuário é preservado em uma chave local separada, baseada no ID autenticado; e-mail não é usado como identificador.
+- Dados locais sem proprietário são preservados como workspace de visitante e não são associados automaticamente à primeira conta autenticada.
+- Ao trocar de conta ou sair, o snapshot da identidade ativa é preservado antes de limpar o workspace ativo, inclusive a chave global legada.
+- Ao entrar, o app recupera o snapshot do namespace daquela conta; o workspace de visitante não é mesclado automaticamente.
+- A inicialização e os callbacks PowerSync recebem uma geração de sessão. Respostas de sessões anteriores não podem atualizar a interface após a troca de identidade.
+- A supressão de eventos locais durante atualizações remotas é vinculada ao ID da conta, evitando que o callback antigo de uma conta desative a proteção da nova sessão.
+- A saída da conta oculta e limpa a interface antes de aguardar a conclusão do logout remoto.
+- A CI valida a presença dos mecanismos de isolamento e executa testes unitários dedicados.
+
+### Arquivos alterados ou adicionados
+
+- `index.html`: bloqueio visual até a resolução de identidade.
+- `styles.css`: regra de ocultação durante o bootstrap.
+- `app.js`: ponte para limpar o workspace ativo sem emitir uma gravação de usuário; sinal de prontidão do app.
+- `src/powersync-ui.js`: bootstrap de identidade, troca de conta, isolamento por sessão e proteção de callbacks.
+- `src/powersync/identity.js`: funções puras para namespace, preservação e recuperação de snapshots.
+- `tests/powersync-identity.test.js`: testes de separação de contas, dados sem proprietário, snapshots inválidos e preservação de backup.
+- `.github/workflows/ci.yml`: validação estrutural da fronteira de identidade.
+
+### Limites e riscos ainda não encerrados
+
+1. O estado operacional da interface ainda é mantido em memória e no armazenamento global legado durante a sessão ativa; o namespace por usuário funciona como cópia isolada de recuperação. A migração para repositórios SQLite ainda não foi feita.
+2. O bootstrap autenticado ainda aguarda o primeiro sync antes de restaurar a interface. O uso offline independente do primeiro sync não está concluído.
+3. Não há teste de navegador automatizado que alterne duas contas Supabase reais no mesmo perfil e observe a tela em cada frame.
+4. Os testes adicionados validam as funções de armazenamento e a CI valida a estrutura do bootstrap; eles não simulam o ciclo completo do Supabase Auth nem o PowerSync Cloud.
+5. A migração explícita de dados legados para uma conta ainda não foi construída. Dados sem proprietário permanecem no espaço de visitante.
+6. A Fase 0B permanece pendente: exclusões explícitas, proteção contra snapshots obsoletos e transações locais coerentes ainda precisam de implementação.
+
+**Status honesto:** primeira parte da Fase 0A implementada; Fase 0A ainda não pode ser considerada integralmente concluída. Nenhuma migration foi aplicada ao projeto Supabase remoto nesta entrega.
