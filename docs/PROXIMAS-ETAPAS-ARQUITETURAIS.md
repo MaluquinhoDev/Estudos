@@ -302,3 +302,8 @@ Não executar `supabase db reset --remote` em produção: a documentação ofici
 ### 8.8 Limite desta revisão
 
 A revisão confirma riscos pela leitura estática dos arquivos disponíveis. Ela não comprova comportamento do PowerSync Cloud, configuração de Sync Streams implantada, estado atual do banco remoto, nem execução das migrations. Essas evidências exigem testes no ambiente correspondente.
+
+
+## 9. Pesquisa de frontend e motor pedagógico
+
+A auditoria do frontend e a pesquisa sobre ferramentas de construção e avaliação do conhecimento foram registradas em [PESQUISA-FRONTEND-E-MOTOR-PEDAGOGICO.md](./PESQUISA-FRONTEND-E-MOTOR-PEDAGOGICO.md). O documento especifica formatos de atividade, evidências de aprendizagem, acessibilidade, desempenho, modelo de tentativas e critérios de qualidade. É uma especificação, não uma declaração de que esses recursos já estejam implementados. A implementação pedagógica permanece condicionada à estabilização da identidade, persistência e sincronização.
