@@ -1,111 +1,117 @@
-# Guia operacional do Supabase — AVA Estudos
+# Guia operacional — Supabase, GitHub e PowerSync
 
 **Projeto Supabase:** `bkhrxosiumviprnhlbim`  
 **Repositório:** [MaluquinhoDev/Estudos](https://github.com/MaluquinhoDev/Estudos)  
-**CLI fixada no CI:** 3.0.0
+**Branch de produção:** `main`
 
-Este guia descreve o estado inicial da integração e o procedimento seguro para administrar o banco. A aplicação PWA ainda utiliza localStorage; publicar o esquema não sincroniza automaticamente os dados locais nem conecta o frontend ao Supabase.
+Este guia separa o que o repositório já prepara do que depende de autorização e configuração manual. O PWA atual ainda usa `localStorage`; a integração GitHub não conecta automaticamente o frontend ao Supabase, e PowerSync ainda não está instalado.
 
-## 1. Arquivos versionados
+## 1. Estado implementado no repositório
 
-- `supabase/config.toml`: configuração do projeto CLI.
-- `supabase/migrations/`: histórico SQL versionado.
-- `.github/workflows/supabase-deploy.yml`: implantação manual e controlada.
-- `docs/AVA-ARQUITETURA-ALVO.md`: arquitetura maior do AVA.
+- `supabase/config.toml`: identifica o projeto Supabase.
+- `supabase/migrations/`: mantém o histórico SQL versionado.
+- `.github/workflows/supabase-deploy.yml`: valida estrutura e nomes dos arquivos SQL; **não conecta ao banco nem aplica migrations**.
+- `docs/AVA-ARQUITETURA-ALVO.md`: registra a arquitetura de evolução.
+- O workflow de Pages continua responsável pela publicação do PWA.
 
-A migração inicial cria as tabelas `profiles`, `courses`, `modules`, `lessons`, `review_cards` e `resources`. Os IDs dos cursos, módulos, conteúdos, cartões e recursos são TEXT para manter compatibilidade com os identificadores gerados atualmente pelo PWA. Todas as tabelas privadas têm RLS e políticas de propriedade por `auth.uid()`.
+A validação do GitHub Actions não substitui a validação SQL em um banco isolado. A integração Supabase é responsável pelo deploy remoto depois de configurada.
 
-## 2. Secrets necessários no GitHub
+## 2. O que precisa ser feito por você — integração Supabase/GitHub
 
-Em **Settings → Secrets and variables → Actions**, cadastre:
+### Etapa A — autorizar a integração
 
-| Nome | Conteúdo |
-|---|---|
-| `SUPABASE_ACCESS_TOKEN` | Personal Access Token do Supabase |
-| `SUPABASE_PROJECT_ID` | `bkhrxosiumviprnhlbim` |
-| `SUPABASE_DB_PASSWORD` | Senha do banco do projeto |
+1. Entre no [Dashboard do Supabase](https://supabase.com/dashboard/project/bkhrxosiumviprnhlbim).
+2. Abra **Project Settings → Integrations**.
+3. Localize **GitHub Integration** e selecione **Authorize GitHub**.
+4. Na página do GitHub, autorize o aplicativo Supabase.
+5. Retorne ao Supabase e selecione o repositório **MaluquinhoDev/Estudos**.
+6. Em **Working directory**, informe `.`, pois a pasta `supabase/` está na raiz.
+7. Configure a branch de produção como `main`.
 
-Não coloque tokens, senhas ou chaves secret em arquivos, commits, Issues, logs ou no frontend. Credenciais que já tenham sido publicadas em conversas devem ser revogadas e substituídas.
+Documentação oficial: [Supabase GitHub Integration](https://supabase.com/docs/guides/deployment/branching/github-integration).
 
-## 3. Preparação no computador
+### Etapa B — não habilitar o deploy de produção ainda
 
-Instale Node.js e use a CLI fixada pelo projeto:
+Conecte e autorize o repositório, mas mantenha **Deploy to production desabilitado** até conferir o histórico remoto e o esquema atual.
 
-```bash
-npx supabase@3.0.0 --version
-npx supabase@3.0.0 login
-npx supabase@3.0.0 link --project-ref bkhrxosiumviprnhlbim
-```
+Motivo: o projeto já possui migrations versionadas, mas a execução anterior do workflow não passou da autenticação do PostgreSQL. Isso não comprova que o esquema remoto está vazio nem que a migration inicial pode ser aplicada sem conflito.
 
-Não é necessário iniciar Docker ou o banco local para executar a CLI contra o projeto hospedado.
+Antes de liberar o deploy:
+- confira no painel Supabase se existem tabelas, dados ou alterações manuais;
+- confira o histórico de migrations aplicado no banco;
+- faça backup verificável;
+- reconcilie qualquer diferença entre o esquema remoto e os arquivos em `supabase/migrations/`.
 
-## 4. Inspecionar o banco remoto antes da primeira migração
+Não execute `db reset --remote` em produção. Não aplique a migration inicial às cegas.
 
-A primeira migração só deve ser aplicada depois de verificar que o esquema remoto não possui tabelas preexistentes que colidam com o modelo AVA.
+### Etapa C — habilitar deploy automático
 
-```bash
-npx supabase@3.0.0 migration list --remote
-npx supabase@3.0.0 db dump --remote
-```
+Depois da reconciliação e revisão do plano de migrations:
 
-A saída do dump deve ser guardada localmente, fora do repositório, como registro/backup. Revise o esquema e faça backup pelo painel antes de qualquer alteração de produção.
+1. Volte a **Project Settings → Integrations → GitHub Integration**.
+2. Ative **Deploy to production** para a branch `main`.
+3. Salve a configuração.
+4. Acompanhe a primeira implantação no painel Supabase, na área de deployments/branch status.
+5. Confirme que cada migration esperada foi aplicada e que não houve falha.
 
-Se o projeto já tiver tabelas ou histórico de migrações, não execute a migração inicial sem reconciliar o esquema remoto com o histórico versionado. Não use `db reset --remote` em produção.
+A integração oficial pode implantar migrations pendentes da pasta `supabase/migrations` quando alterações chegam à branch de produção. Também pode implantar Edge Functions e buckets declarados em `config.toml`. A integração e o deploy pela branch principal funcionam nos planos gratuitos; ambientes de preview por branching exigem plano Pro conforme a documentação vigente.
 
-## 5. Revisar e aplicar migrações
+## 3. O que muda nos GitHub Actions
 
-Pré-visualize:
+O workflow `.github/workflows/supabase-deploy.yml` foi convertido em validação de arquivos. Ele:
+- confere o `project_id`;
+- verifica se existem migrations SQL;
+- verifica padrão de nome, timestamp único e arquivo não vazio;
+- não usa senha do banco;
+- não executa `supabase db push`;
+- não modifica o banco remoto.
 
-```bash
-npx supabase@3.0.0 db push --dry-run --remote
-```
+O deploy remoto passa a ser responsabilidade da integração oficial Supabase/GitHub, evitando dois deploys concorrentes.
 
-Aplique somente depois de revisar o plano:
+Os secrets `SUPABASE_ACCESS_TOKEN` e `SUPABASE_DB_PASSWORD` não são usados por esse workflow de validação. Não é necessário criar novos secrets para autorizar a integração: a autorização é feita pelo fluxo OAuth do Supabase/GitHub. Não exponha tokens ou senhas em mensagens, arquivos ou commits.
 
-```bash
-npx supabase@3.0.0 db push --yes --remote
-```
+## 4. PowerSync — etapa posterior, ainda não ativada
 
-A CLI v3 usa o banco local como padrão para comandos de banco. O sinalizador `--remote` é obrigatório para deixar explícito que o destino é o projeto hospedado. Em automação não interativa, `--yes` confirma a alteração remota.
+**Decisão:** PowerSync será a camada offline-first; Supabase continua como backend e PostgreSQL como fonte remota de verdade.
 
-## 6. GitHub Actions
+O PowerSync mantém SQLite local no cliente, sincroniza dados autorizados por Sync Rules e enfileira escritas offline. O envio ao backend é implementado pelo aplicativo através de `uploadData()` e de uma API de escrita controlada.
 
-O workflow `.github/workflows/supabase-deploy.yml` está configurado para execução manual por segurança durante a implantação inicial. Ele:
+O que ainda precisa ser construído:
+1. Validar o PowerSync Web SDK em um protótipo compatível com o PWA e os navegadores-alvo.
+2. Criar/configurar o projeto PowerSync e a conexão com o PostgreSQL Supabase.
+3. Definir Sync Rules por usuário e tabelas autorizadas.
+4. Criar API de upload autenticada que valide propriedade, relações, tipos e idempotência.
+5. Testar conflito, reenvio, perda de conexão, retomada e isolamento entre duas contas.
+6. Migrar dados de `localStorage` somente após backup, importação testada e comparação de integridade.
 
-1. valida a presença dos três secrets;
-2. verifica a configuração e os arquivos SQL;
-3. instala Supabase CLI 3.0.0;
-4. vincula o projeto;
-5. executa `db push --dry-run --remote`;
-6. aplica as migrações com `db push --yes --remote`.
+Não colocar `service_role`, senha do banco ou credenciais administrativas no JavaScript do navegador. A sincronização não está ativa apenas por adicionar documentação ou conectar o repositório.
 
-Acesse **Actions → Supabase - Validate and deploy database migrations → Run workflow**. O workflow não consegue verificar os valores dos secrets, apenas detectar se estão vazios. Uma execução bem-sucedida é a evidência de que autenticação, vínculo e migração funcionaram.
+Referências:
+- [PowerSync + Supabase](https://supabase.com/partners/catalog/powersync)
+- [PowerSync documentation](https://docs.powersync.com/)
+- [Supabase deployment](https://supabase.com/docs/guides/deployment)
 
-## 7. Modelo de segurança
+## 5. Segurança e credenciais
 
-- RLS está habilitado nas tabelas privadas.
-- Cada registro de conteúdo inclui `user_id`.
-- As políticas limitam as operações ao usuário autenticado proprietário.
-- A criação de perfil é feita por trigger após o cadastro em Auth.
-- A chave publishable pode ficar no frontend, mas somente com RLS e políticas corretas.
-- Chaves secret/service_role, PAT e senha do banco nunca podem ficar no navegador.
+- Chave publishable pode ser usada no frontend somente com RLS e políticas corretas.
+- Chave secret/service_role, PAT e senha do banco nunca podem estar no navegador.
+- Credenciais que já tenham sido expostas devem ser revogadas ou substituídas.
+- Não compartilhe senhas ou tokens em Issues, commits, logs ou conversas.
+- Teste RLS com duas contas diferentes, incluindo tentativas de leitura e escrita cruzadas.
 
-Depois de aplicar o esquema, teste duas contas diferentes para confirmar que uma não consegue consultar ou alterar os registros da outra.
+## 6. Limites atuais
 
-## 8. Estado atual e limites
+- O PWA ainda salva dados em `localStorage`.
+- Não há login Supabase integrado ao frontend.
+- Não há SQLite/PowerSync, Sync Rules ou fila de sincronização implementados.
+- Não há importação automática dos dados locais para o PostgreSQL.
+- A conexão GitHub/Supabase depende da autorização feita no painel pelo proprietário.
+- O deploy de produção permanece bloqueado até a reconciliação do esquema e do histórico remoto.
 
-- O esquema SQL está versionado, mas ainda não foi aplicado ao projeto remoto.
-- O workflow está preparado, mas ainda não foi executado.
-- O PWA continua salvando dados em localStorage.
-- Não existe ainda sincronização local/remota, importação automática do backup JSON, login integrado ou configuração da URL/chave publishable no frontend.
-- A migração inicial não importa dados já armazenados no navegador.
-- A migração cria apenas a estrutura de dados inicial; tentativas, respostas, eventos de aprendizagem e domínio adaptativo permanecem etapas futuras.
+## 7. Referências oficiais
 
-## 9. Referências oficiais
-
-- [Supabase CLI v3](https://supabase.com/docs/guides/local-development/cli/migrating-to-v3)
+- [Supabase GitHub Integration](https://supabase.com/docs/guides/deployment/branching/github-integration)
+- [Supabase deployment](https://supabase.com/docs/guides/deployment)
 - [Database migrations](https://supabase.com/docs/guides/deployment/database-migrations)
-- [Local development workflow](https://supabase.com/docs/guides/local-development/cli-workflows)
-- [Row Level Security](https://supabase.com/docs/guides/database/postgres/row-level-security)
-- [API keys](https://supabase.com/docs/guides/getting-started/api-keys)
-- [GitHub Actions secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)
+- [PowerSync + Supabase](https://supabase.com/partners/catalog/powersync)
+- [PowerSync documentation](https://docs.powersync.com/)
