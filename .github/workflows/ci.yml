@@ -124,6 +124,15 @@ jobs:
           if (!connector.includes('WRITABLE_TABLES') || !connector.includes('.eq("user_id", user.id)')) {
             throw new Error('Supabase uploads must whitelist tables and constrain mutations to the signed-in user');
           }
+          if (!connector.includes('onConflict: "id"')) {
+            throw new Error('PowerSync uploads must use the table primary key id as the upsert conflict target');
+          }
+          if (connector.includes('onConflict: "id,user_id"')) {
+            throw new Error('Composite id,user_id conflict target is not guaranteed by the PowerSync primary-key model');
+          }
+          if (!fs.existsSync('supabase/diagnostics/ava_schema_preflight.sql')) {
+            throw new Error('Read-only AVA schema preflight SQL is missing');
+          }
           if (connector.includes('service_role') || connector.includes('SUPABASE_DB_PASSWORD')) {
             throw new Error('Privileged database credentials must never be present in the browser connector');
           }
