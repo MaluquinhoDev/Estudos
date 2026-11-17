@@ -167,45 +167,136 @@ function sameContent(a, b, table) {
   return CONTENT_FIELDS[table].every(field => (a[field] ?? null) === (b[field] ?? null));
 }
 
-export async function writeSnapshotToPowerSync(database, snapshot, userId) {
-  const desired = snapshotToRows(snapshot, userId);
-  const existing = {};
-  for (const table of TABLES) {
-    existing[table] = await database.getAll("SELECT * FROM " + table);
+function indexRows(rows) {
+  return new Map(rows.map(row => [row.id, row]));
+}
+
+function conflict(table, id, reason) {
+  throw new Error("Conflito de sincronização em " + table + "/" + id + ": " + reason);
+}
+
+/**
+ * Calculates mutations from a known base snapshot to a newer local snapshot.
+ * A missing row is a delete only when it existed in the known base.
+ * Concurrent remote changes are rejected instead of silently overwritten.
+ */
+export function planSnapshotChanges(previousSnapshot, nextSnapshot, currentRows, userId) {
+  if (!userId) throw new Error("Identidade obrigatória para alterar dados PowerSync.");
+  const previous = snapshotToRows(previousSnapshot || { courses: [], cards: [], resources: [] }, userId);
+  const next = snapshotToRows(nextSnapshot, userId);
+  const plan = { deletes: [], upserts: [] };
+
+  for (const table of [...TABLES].reverse()) {
+    const before = indexRows(previous[table]);
+    const after = indexRows(next[table]);
+    const current = indexRows(currentRows[table] || []);
+
+    for (const [id, oldRow] of before) {
+      if (after.has(id)) continue;
+      const stored = current.get(id);
+      if (!stored) continue;
+      if (!sameContent(stored, oldRow, table)) {
+        conflict(table, id, "o registro foi alterado remotamente antes da exclusão");
+      }
+      plan.deletes.push({ table, id, userId });
+    }
   }
 
+  for (const table of TABLES) {
+    const before = indexRows(previous[table]);
+    const after = indexRows(next[table]);
+    const current = indexRows(currentRows[table] || []);
+
+    for (const [id, nextRow] of after) {
+      const oldRow = before.get(id);
+      const stored = current.get(id);
+
+      if (oldRow && sameContent(oldRow, nextRow, table)) continue;
+
+      if (!oldRow) {
+        if (!stored) {
+          plan.upserts.push({ table, row: nextRow });
+          continue;
+        }
+        if (sameContent(stored, nextRow, table)) continue;
+        conflict(table, id, "o registro já existe com conteúdo diferente da base local");
+      }
+
+      if (!stored) {
+        conflict(table, id, "o registro foi removido remotamente");
+      }
+      if (sameContent(stored, nextRow, table)) continue;
+      if (!sameContent(stored, oldRow, table)) {
+        conflict(table, id, "o registro foi alterado remotamente em paralelo");
+      }
+
+      plan.upserts.push({
+        table,
+        row: {
+          ...nextRow,
+          created_at: stored.created_at || nextRow.created_at,
+          updated_at: now()
+        }
+      });
+    }
+  }
+
+  return plan;
+}
+
+async function readRowsInTransaction(tx) {
+  const rows = {};
+  for (const table of TABLES) {
+    rows[table] = await tx.getAll("SELECT * FROM " + table);
+  }
+  return rows;
+}
+
+async function executeMutationPlan(tx, plan) {
+  for (const item of plan.deletes) {
+    await tx.execute(
+      "DELETE FROM " + item.table + " WHERE id = ? AND user_id = ?",
+      [item.id, item.userId]
+    );
+  }
+
+  for (const { table, row } of plan.upserts) {
+    const columns = Object.keys(row);
+    const placeholders = columns.map(() => "?").join(", ");
+    const updates = columns
+      .filter(column => column !== "id")
+      .map(column => column + " = excluded." + column)
+      .join(", ");
+    await tx.execute(
+      "INSERT INTO " + table + " (" + columns.join(", ") + ") VALUES (" + placeholders +
+      ") ON CONFLICT(id) DO UPDATE SET " + updates,
+      columns.map(column => row[column] ?? null)
+    );
+  }
+}
+
+/**
+ * Applies an incremental, optimistic-concurrency-checked snapshot delta.
+ * Reads and writes happen under the same PowerSync transaction lock.
+ */
+export async function applySnapshotChanges(database, previousSnapshot, nextSnapshot, userId, options = {}) {
   await database.writeTransaction(async tx => {
-    // Delete children before parents so local and remote foreign-key order stays valid.
-    for (const table of [...TABLES].reverse()) {
-      const keep = new Set(desired[table].map(row => row.id));
-      for (const row of existing[table]) {
-        if (!keep.has(row.id)) {
-          await tx.execute("DELETE FROM " + table + " WHERE id = ?", [row.id]);
-        }
-      }
-    }
-
-    for (const table of TABLES) {
-      const previous = new Map(existing[table].map(row => [row.id, row]));
-      const columns = Object.keys(desired[table][0] || {});
-      if (!columns.length) continue;
-      const placeholders = columns.map(() => "?").join(", ");
-      const updates = columns.filter(column => column !== "id").map(column => column + " = excluded." + column).join(", ");
-
-      for (const row of desired[table]) {
-        const old = previous.get(row.id);
-        if (old && sameContent(old, row, table)) continue;
-        if (old) {
-          row.created_at = old.created_at || row.created_at;
-          row.updated_at = now();
-        }
-        await tx.execute(
-          "INSERT INTO " + table + " (" + columns.join(", ") + ") VALUES (" + placeholders + ") ON CONFLICT(id) DO UPDATE SET " + updates,
-          columns.map(column => row[column] ?? null)
-        );
-      }
-    }
+    if (options.isCurrent && !options.isCurrent()) throw new Error("Snapshot obsoleto descartado.");
+    const currentRows = await readRowsInTransaction(tx);
+    if (options.isCurrent && !options.isCurrent()) throw new Error("Snapshot obsoleto descartado.");
+    const plan = planSnapshotChanges(previousSnapshot, nextSnapshot, currentRows, userId);
+    if (options.isCurrent && !options.isCurrent()) throw new Error("Snapshot obsoleto descartado.");
+    await executeMutationPlan(tx, plan);
+    if (options.isCurrent && !options.isCurrent()) throw new Error("Snapshot obsoleto descartado.");
   });
+}
+
+/**
+ * Bootstrap/import path: additive only. Existing records are never deleted or
+ * overwritten; conflicting content must be reconciled explicitly.
+ */
+export async function writeSnapshotToPowerSync(database, snapshot, userId) {
+  return applySnapshotChanges(database, { schemaVersion: 2, courses: [], cards: [], resources: [] }, snapshot, userId);
 }
 
 export function mergeSnapshots(localSnapshot, remoteSnapshot, userId) {
