@@ -63,6 +63,7 @@ jobs:
           node --check vite.config.js
           node --check src/powersync-ui.js
           node --check src/powersync/schema.js
+          node --check src/powersync/identity.js
           node --check src/powersync/connector.js
           node --check src/powersync/snapshot.js
           node --check tests/powersync-connector.test.js
@@ -133,6 +134,27 @@ jobs:
         run: |
           node -e 'const fs=require("fs"); const c=fs.readFileSync("styles.css","utf8"); for(const token of ["grid-template-columns: repeat(4, minmax(0, 1fr))","grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr)","@media (max-width: 820px)","@media (max-width: 420px)","overflow-y: auto","min-width: 0"]) if(!c.includes(token)) throw Error("Missing responsive safeguard: "+token)'
 
+      - name: Validate account workspace isolation
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const app = fs.readFileSync('app.js', 'utf8');
+          const ui = fs.readFileSync('src/powersync-ui.js', 'utf8');
+          const identity = fs.readFileSync('src/powersync/identity.js', 'utf8');
+          const tests = fs.readFileSync('tests/powersync-identity.test.js', 'utf8');
+          for (const [name, source, token] of [
+            ['HTML bootstrap gate', html, 'data-identity-pending'],
+            ['App identity bridge', app, 'clearSnapshot'],
+            ['App identity readiness', app, 'setIdentityReady'],
+            ['PowerSync account namespace', ui, 'loadUserWorkspace'],
+            ['PowerSync stale-session guard', ui, 'sessionGeneration'],
+            ['Identity storage helper', identity, 'estudos-ava-v2:user:'],
+            ['Identity regression tests', tests, 'unowned legacy data']
+          ]) {
+            if (!source.includes(token)) throw new Error(name + ' is missing required isolation behavior: ' + token);
+          }
+          NODE
       - name: Validate PowerSync configuration and ownership boundaries
         run: |
           node <<'NODE'
