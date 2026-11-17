@@ -307,3 +307,20 @@ A revisão confirma riscos pela leitura estática dos arquivos disponíveis. Ela
 ## 9. Pesquisa de frontend e motor pedagógico
 
 A auditoria do frontend e a pesquisa sobre ferramentas de construção e avaliação do conhecimento foram registradas em [PESQUISA-FRONTEND-E-MOTOR-PEDAGOGICO.md](./PESQUISA-FRONTEND-E-MOTOR-PEDAGOGICO.md). O documento especifica formatos de atividade, evidências de aprendizagem, acessibilidade, desempenho, modelo de tentativas e critérios de qualidade. É uma especificação, não uma declaração de que esses recursos já estejam implementados. A implementação pedagógica permanece condicionada à estabilização da identidade, persistência e sincronização.
+
+
+## 10. Execução parcial da Fase 0B — 17/11/2026
+
+A primeira implementação de integridade incremental foi publicada e detalhada em [EXECUCAO-FASE-0.md](./EXECUCAO-FASE-0.md), seção 10.
+
+Entregas verificáveis no código:
+- bootstrap aditivo sem exclusão por ausência em snapshot;
+- plano de mutações baseado na diferença entre snapshot-base e snapshot novo;
+- exclusões explícitas por ID e proprietário;
+- leitura e escrita no mesmo contexto transacional PowerSync;
+- detecção otimista de edição/exclusão concorrente;
+- revisão monotônica dos eventos e descarte de eventos obsoletos;
+- proteção para não aplicar leitura remota sobre edição local ocorrida durante a leitura;
+- testes unitários e validação CI desses contratos.
+
+**Não concluído:** a UI ainda usa localStorage operacional e a ponte ainda recebe snapshots completos; faltam repositórios por entidade, teste com SQLite/PowerSync real, teste de duas contas no navegador, Supabase local e sincronização Cloud. Esta entrega não conclui a Fase 0B nem altera o banco remoto.
