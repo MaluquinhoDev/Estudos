@@ -30,9 +30,28 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build PowerSync browser bundle
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_POWERSYNC_URL: ${{ vars.VITE_POWERSYNC_URL }}
+        run: |
+          npm run build
+          cp index.html app.js styles.css service-worker.js manifest.webmanifest dist/
+          cp -R icons dist/icons
+
       - name: Validate application before publishing
         run: |
-          test -f index.html
+          test -f dist/index.html
+          test -f dist/app.js
+          test -f dist/powersync.js
+          test -f dist/styles.css
+          test -f dist/service-worker.js
+          test -f dist/manifest.webmanifest
+          test -f dist/index.html
           test -f app.js
           test -f styles.css
           test -f service-worker.js
@@ -40,6 +59,7 @@ jobs:
           test -f icons/icon.svg
           node --check app.js
           node --check service-worker.js
+          node --check src/powersync-ui.js
           node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8')); if (!m.name || !m.start_url || !m.icons?.length) process.exit(1)"
 
       - name: Set up GitHub Pages
@@ -48,7 +68,7 @@ jobs:
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: dist
 
       - name: Deploy
         id: deployment
