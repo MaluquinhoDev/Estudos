@@ -217,3 +217,22 @@ dialog{width:calc(100% - 20px);max-width:520px;max-height:min(88vh,720px);max-he
 dialog{width:calc(100% - 16px);padding:15px}
 .dialog-actions{grid-template-columns:1fr}
 }
+
+
+/* Account and cloud synchronization controls. */
+.sync-panel{display:grid;gap:6px;margin:10px 0 12px;padding:10px;border:1px solid var(--line);border-radius:9px;background:#ffffff05}
+.sync-panel .sync-button{width:100%;min-height:38px;padding:7px 9px;font-size:.68rem}
+.sync-caption{display:block;color:var(--muted);font-size:.62rem;line-height:1.4}
+.sync-user{display:flex;align-items:center;gap:8px;min-width:0}
+.sync-user>span:last-child{display:grid;min-width:0;gap:3px}
+.sync-user strong{font-size:.68rem}
+.sync-user small{overflow-wrap:anywhere;color:var(--muted);font-size:.6rem}
+.sync-indicator{width:8px;height:8px;flex:0 0 auto;border-radius:50%;background:#7bcdb0;box-shadow:0 0 0 4px #7bcdb022}
+.sync-dialog{width:min(460px,calc(100% - 24px))}
+.sync-auth-content>p{color:var(--muted);font-size:.75rem;line-height:1.5}
+.sync-auth-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sync-auth-actions #sync-submit{grid-column:1/-1}
+#sync-message{min-height:1.2em;overflow-wrap:anywhere}
+#sync-message[data-kind="error"]{color:#e5a1a1}
+#sync-message[data-kind="success"]{color:#8dd7c2}
+@media(max-width:680px){.side-bottom{display:block;padding-top:8px}.side-bottom>.utility{display:none}.sync-panel{margin:8px 0 0}.sync-auth-actions{grid-template-columns:1fr 1fr}}
