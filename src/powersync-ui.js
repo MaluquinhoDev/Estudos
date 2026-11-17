@@ -23,6 +23,8 @@ let syncing = false;
 let suppressLocalEventsForUser = null;
 let applyingPowerSyncChangesForUser = null;
 let syncQueue = Promise.resolve();
+let lastAppliedSnapshot = null;
+let latestLocalRevision = 0;
 let sessionGeneration = 0;
 let isolatedUserId = null;
 import {
@@ -113,6 +115,10 @@ function createDatabase(userId) {
 
 async function stopSync({ invalidate = true } = {}) {
   if (invalidate) sessionGeneration += 1;
+  if (invalidate) {
+    lastAppliedSnapshot = null;
+    latestLocalRevision = 0;
+  }
   if (disposeChangeListener) {
     disposeChangeListener();
     disposeChangeListener = null;
@@ -172,6 +178,8 @@ async function startSync(session) {
       persistWorkspaceSnapshot(userId, merged);
       localStorage.setItem(OWNER_KEY, userId);
       window.EstudosBridge?.replaceSnapshot?.(merged);
+      lastAppliedSnapshot = merged;
+      latestLocalRevision = 0;
     } finally {
       if (suppressLocalEventsForUser === userId) suppressLocalEventsForUser = null;
     }
@@ -187,6 +195,7 @@ async function startSync(session) {
           const latest = await snapshotTools.readPowerSyncSnapshot(db);
           if (!isCurrentSession()) return;
           persistWorkspaceSnapshot(userId, latest);
+          lastAppliedSnapshot = latest;
           window.EstudosBridge?.replaceSnapshot?.(latest);
         } catch (error) {
           console.error("PowerSync remote update could not be applied:", error);
@@ -214,17 +223,32 @@ async function startSync(session) {
 
 function onLocalDataSaved(event) {
   if (!syncing || suppressLocalEventsForUser === currentUser?.id) return;
-  const snapshot = event.detail;
+  const payload = event.detail || {};
+  const snapshot = payload.snapshot;
+  const revision = Number(payload.revision);
   const ownerId = currentUser?.id;
   const targetDatabase = database;
-  if (!ownerId || !targetDatabase) return;
+  if (!ownerId || !targetDatabase || !snapshot || !Number.isSafeInteger(revision)) return;
+  if (revision <= latestLocalRevision) return;
+
+  latestLocalRevision = revision;
   persistWorkspaceSnapshot(ownerId, snapshot);
   syncQueue = syncQueue
-    .then(() => {
+    .then(async () => {
       if (currentUser?.id !== ownerId || database !== targetDatabase || !syncing) return;
-      return snapshotTools.writeSnapshotToPowerSync(targetDatabase, snapshot, ownerId);
+      if (revision !== latestLocalRevision) return;
+      const base = lastAppliedSnapshot || emptySnapshot();
+      await snapshotTools.applySnapshotChanges(
+        targetDatabase,
+        base,
+        snapshot,
+        ownerId,
+        { isCurrent: () => currentUser?.id === ownerId && database === targetDatabase && syncing && revision === latestLocalRevision }
+      );
+      lastAppliedSnapshot = snapshot;
     })
     .catch(error => {
+      if (error?.message === "Snapshot obsoleto descartado.") return;
       console.error("PowerSync local write failed:", error);
       showMessage("Alteração salva neste aparelho; sincronização pendente: " + error.message, "error");
     });
