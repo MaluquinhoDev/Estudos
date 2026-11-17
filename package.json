@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "check": "node --check app.js && node --check service-worker.js && node --check src/powersync-ui.js"
+    "check": "node --check app.js && node --check service-worker.js && node --check src/powersync-ui.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@powersync/web": "2.7.0",
