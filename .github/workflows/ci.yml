@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
       - name: Check required files
         run: |
           test -f index.html
@@ -32,6 +34,11 @@ jobs:
         run: |
           node --check app.js
           node --check service-worker.js
+          node --check vite.config.js
+          node --check src/powersync-ui.js
+          node --check src/powersync/schema.js
+          node --check src/powersync/connector.js
+          node --check src/powersync/snapshot.js
       - name: Validate manifest
         run: node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8')); if (!m.name || !m.start_url || !m.icons?.length) process.exit(1)"
       - name: Validate AVA structure
@@ -98,3 +105,29 @@ jobs:
       - name: Validate responsive layout safeguards
         run: |
           node -e 'const fs=require("fs"); const c=fs.readFileSync("styles.css","utf8"); for(const token of ["grid-template-columns: repeat(4, minmax(0, 1fr))","grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr)","@media (max-width: 820px)","@media (max-width: 420px)","overflow-y: auto","min-width: 0"]) if(!c.includes(token)) throw Error("Missing responsive safeguard: "+token)'
+
+      - name: Validate PowerSync configuration and ownership boundaries
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const sync = fs.readFileSync('powersync/sync-config.yaml', 'utf8');
+          const connector = fs.readFileSync('src/powersync/connector.js', 'utf8');
+          const migration = fs.readFileSync('supabase/migrations/20261117000100_grant_authenticated_data_api.sql', 'utf8');
+          for (const table of ['profiles','courses','modules','lessons','review_cards','resources']) {
+            if (!sync.includes('FROM ' + table)) throw new Error('Missing PowerSync stream table: ' + table);
+          }
+          if (!sync.includes('auth.user_id()')) throw new Error('Sync streams must scope data to auth.user_id()');
+          if (!connector.includes('WRITABLE_TABLES') || !connector.includes('.eq("user_id", user.id)')) {
+            throw new Error('Supabase uploads must whitelist tables and constrain mutations to the signed-in user');
+          }
+          if (connector.includes('service_role') || connector.includes('SUPABASE_DB_PASSWORD')) {
+            throw new Error('Privileged database credentials must never be present in the browser connector');
+          }
+          if (!migration.includes('TO authenticated')) throw new Error('Authenticated Data API grants are missing');
+          NODE
+      - name: Run unit tests
+        run: npm test
+      - name: Build PowerSync browser bundle
+        run: |
+          npm run build
+          test -s dist/powersync.js
