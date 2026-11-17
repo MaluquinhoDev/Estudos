@@ -75,16 +75,16 @@ Atualmente cursos, módulos, conteúdos, cartões e recursos são armazenados em
 ## Arquitetura técnica atual
 
 - HTML semântico, CSS responsivo e JavaScript nativo.
-- Sem framework, CDN, dependência externa ou etapa de build.
+- Interface principal em HTML, CSS e JavaScript nativo.\n- Bundle separado com Vite para Supabase JS e PowerSync Web SDK; o SDK só é carregado quando a configuração de nuvem existe e o usuário entra na conta.
 - GitHub Pages hospeda os arquivos estáticos.
 - Service Worker mantém o shell disponível offline.
-- localStorage persiste os dados no navegador atual.
+- localStorage mantém compatibilidade com o modelo atual da interface e backup JSON.\n- PowerSync mantém SQLite persistente por usuário, fila de alterações offline e sincronização remota; o estado local é espelhado para o SQLite.
 - JSON permite backup e restauração manual.
-- GitHub Actions valida a estrutura e publica o site.
+- GitHub Actions executa testes, gera o bundle PowerSync e publica o site estático.\n- Supabase Auth autentica contas por e-mail/senha.\n- Sync Streams filtram os dados pelo usuário autenticado; uploads usam a sessão Supabase e RLS.
 
 ### Limites
 
-GitHub Pages não fornece banco de dados, autenticação, API privada ou sincronização entre dispositivos. localStorage não é backup confiável: limpar os dados do site/navegador pode apagá-los. Esta versão é de usuário único e navegador único. Não armazenar informações sensíveis ou dados de terceiros.
+GitHub Pages não fornece banco de dados, autenticação, API privada ou sincronização entre dispositivos. localStorage não é backup confiável: limpar os dados do site/navegador pode apagá-los. A sincronização entre dispositivos exige configurar Supabase e PowerSync Cloud; sem essas configurações, a aplicação continua em modo local. Não armazenar informações sensíveis ou dados de terceiros.
 
 ## Evolução planejada
 
