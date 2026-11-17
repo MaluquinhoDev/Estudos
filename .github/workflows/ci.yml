@@ -31,11 +31,13 @@ jobs:
           test -f icons/icon.svg
           test -f docs/AVA-ARQUITETURA.md
           test -f docs/PROXIMAS-ETAPAS-ARQUITETURAIS.md
+          test -f docs/EXECUCAO-FASE-0.md
       - name: Validate architecture roadmap
         run: |
           node <<'NODE'
           const fs = require('node:fs');
           const roadmap = fs.readFileSync('docs/PROXIMAS-ETAPAS-ARQUITETURAIS.md', 'utf8');
+          const phaseZero = fs.readFileSync('docs/EXECUCAO-FASE-0.md', 'utf8');
           for (const token of [
             'Etapa 0',
             'Etapa 1',
@@ -49,6 +51,9 @@ jobs:
             'RLS'
           ]) {
             if (!roadmap.includes(token)) throw new Error('Architecture roadmap is missing: ' + token);
+          }
+          for (const token of ['Fase 0A', 'Fase 0B', 'A→logout→B', 'CRUD queue', 'pgTAP']) {
+            if (!phaseZero.includes(token)) throw new Error('Phase 0 execution plan is missing: ' + token);
           }
           NODE
       - name: Validate JavaScript syntax
