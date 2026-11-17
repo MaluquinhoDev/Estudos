@@ -1,0 +1,16 @@
+config:
+  edition: 3
+
+streams:
+  user_data:
+    auto_subscribe: true
+    queries:
+      # Profiles are keyed by auth.users.id, not user_id.
+      - SELECT * FROM profiles WHERE id = auth.user_id()
+
+      # Every other table is scoped by the authenticated owner.
+      - SELECT * FROM courses WHERE user_id = auth.user_id()
+      - SELECT * FROM modules WHERE user_id = auth.user_id()
+      - SELECT * FROM lessons WHERE user_id = auth.user_id()
+      - SELECT * FROM review_cards WHERE user_id = auth.user_id()
+      - SELECT * FROM resources WHERE user_id = auth.user_id()
