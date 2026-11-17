@@ -36,3 +36,5 @@ jobs:
         run: node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8')); if (!m.name || !m.start_url || !m.icons?.length) process.exit(1)"
       - name: Validate AVA structure
         run: node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); const j=fs.readFileSync('app.js','utf8'); for(const id of ['app-content','app-dialog','import-file','review-count']) if(!h.includes('id=\"'+id+'\"')) throw Error(id); for(const fn of ['dashboard','coursesPage','coursePage','reviews','library','progress','exportData','importData']) if(!j.includes('function '+fn)) throw Error(fn)"
+      - name: Validate responsive layout safeguards
+        run: node -e "const fs=require('fs'); const c=fs.readFileSync('styles.css','utf8'); for(const token of ['grid-template-columns: repeat(4, minmax(0, 1fr))','grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr)','@media (max-width: 820px)','@media (max-width: 420px)','overflow-y: auto','min-width: 0']) if(!c.includes(token)) throw Error('Missing responsive safeguard: '+token)"
