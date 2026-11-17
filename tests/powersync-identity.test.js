@@ -67,3 +67,12 @@ test("empty workspace does not overwrite an existing guest backup", () => {
   preserveWorkspace(storage, emptySnapshot());
   assert.equal(loadGuestSnapshot(storage).courses[0].title, "guest-backup");
 });
+
+test("empty legacy workspace does not overwrite an existing user backup", () => {
+  const storage = storageMock({
+    [OWNER_KEY]: "user-A",
+    [userSnapshotKey("user-A")]: JSON.stringify(snapshot("saved-A"))
+  });
+  preserveWorkspace(storage, emptySnapshot());
+  assert.equal(loadUserSnapshot(storage, "user-A").courses[0].title, "saved-A");
+});
