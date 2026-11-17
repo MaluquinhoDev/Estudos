@@ -49,13 +49,13 @@ Automação
 | Tecnologia | Responsabilidade |
 |---|---|
 | PWA + JavaScript modular | Interface leve e instalação |
-| IndexedDB | Persistência estruturada local |
+| SQLite local via PowerSync Web SDK | Persistência local estruturada e consultas reativas offline |
 | Service Worker | Cache e shell offline |
 | Supabase Auth | Identidade e sessões |
-| Supabase PostgreSQL | Fonte remota persistente |
+| Supabase PostgreSQL | Fonte remota persistente e fonte de verdade |
 | Supabase Storage | Anexos e arquivos |
 | Supabase Edge Functions | Operações que exigem execução no servidor |
-| GitHub Actions | Testes, migrações e implantação |
+| Supabase GitHub Integration | Implantação de migrations e recursos Supabase declarados |\n| GitHub Actions | CI, validação estática e testes automatizados |\n| PowerSync | Sincronização local-first entre SQLite e PostgreSQL |
 | JSON versionado | Importação, exportação e recuperação |
 
 A chave publishable do Supabase pode ser usada no cliente, desde que as tabelas tenham RLS e políticas corretas. Chaves secretas nunca devem ser incluídas no frontend, no repositório ou em artefatos públicos.
@@ -193,6 +193,6 @@ Confiabilidade, testes e recuperação são requisitos transversais: começam na
 - GitHub Pages hospeda a interface, não executa backend privado.
 - Segredos não podem ser enviados ao navegador.
 - RLS é requisito, não melhoria opcional.
-- O projeto Supabase e as credenciais precisam ser criados pelo proprietário.
+- O projeto Supabase e a autorização da integração GitHub precisam ser configurados pelo proprietário.\n- PowerSync é uma camada adicional; seu serviço, endpoint, credenciais públicas de conexão e API de upload precisam ser configurados antes de habilitar sincronização no cliente.\n- A ativação do deploy de produção deve aguardar a reconciliação do histórico remoto de migrations e a verificação do esquema existente.
 - Ambientes preview Supabase por branching podem exigir plano pago; implantação pela branch principal e CLI está disponível em todos os planos conforme documentação vigente.
 - A arquitetura não implica que funcionalidades futuras já estejam implementadas.
