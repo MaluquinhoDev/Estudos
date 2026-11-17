@@ -190,18 +190,22 @@ async function startSync(session) {
       onChange: async () => {
         if (!isCurrentSession() || applyingPowerSyncChangesForUser === userId) return;
         applyingPowerSyncChangesForUser = userId;
-        suppressLocalEventsForUser = userId;
+        const localRevisionAtStart = latestLocalRevision;
         try {
           const latest = await snapshotTools.readPowerSyncSnapshot(db);
-          if (!isCurrentSession()) return;
+          if (!isCurrentSession() || latestLocalRevision !== localRevisionAtStart) return;
           persistWorkspaceSnapshot(userId, latest);
           lastAppliedSnapshot = latest;
-          window.EstudosBridge?.replaceSnapshot?.(latest);
+          suppressLocalEventsForUser = userId;
+          try {
+            window.EstudosBridge?.replaceSnapshot?.(latest);
+          } finally {
+            if (suppressLocalEventsForUser === userId) suppressLocalEventsForUser = null;
+          }
         } catch (error) {
           console.error("PowerSync remote update could not be applied:", error);
           showMessage("Atualização recebida, mas a tela não foi atualizada: " + error.message, "error");
         } finally {
-          if (suppressLocalEventsForUser === userId) suppressLocalEventsForUser = null;
           if (applyingPowerSyncChangesForUser === userId) applyingPowerSyncChangesForUser = null;
         }
       }
