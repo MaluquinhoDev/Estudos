@@ -147,7 +147,7 @@ jobs:
             ['HTML bootstrap gate', html, 'data-identity-pending'],
             ['App identity bridge', app, 'clearSnapshot'],
             ['App identity readiness', app, 'setIdentityReady'],
-            ['PowerSync account namespace', ui, 'loadUserWorkspace'],
+            ['PowerSync account namespace', ui, 'readUserWorkspace'],
             ['PowerSync stale-session guard', ui, 'sessionGeneration'],
             ['Identity storage helper', identity, 'estudos-ava-v2:user:'],
             ['Identity regression tests', tests, 'unowned legacy data']
