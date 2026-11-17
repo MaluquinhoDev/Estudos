@@ -11,6 +11,8 @@ const message = document.querySelector("#sync-message");
 const account = document.querySelector("#sync-account");
 const submit = document.querySelector("#sync-submit");
 let database;
+let databaseUserId = null;
+let disposeChangeListener = null;
 let connector;
 let supabase;
 let PowerSyncDatabase;
@@ -20,6 +22,7 @@ let SupabasePowerSyncConnector;
 let snapshotTools;
 let syncing = false;
 let suppressLocalEvents = false;
+let applyingPowerSyncChanges = false;
 let syncQueue = Promise.resolve();
 
 function showMessage(text, kind = "info") {
@@ -54,19 +57,25 @@ async function loadPowerSyncModules() {
   snapshotTools = snapshotModule;
 }
 
-function createDatabase() {
-  if (database) return database;
+function createDatabase(userId) {
+  if (database && databaseUserId === userId) return database;
   database = new PowerSyncDatabase({
     schema: EstudosSchema,
     database: {
-      dbFilename: "estudos-ava.db",
+      dbFilename: "estudos-ava-" + userId + ".db",
       vfs: WASQLiteVFS.IDBBatchAtomicVFS
     }
   });
+  databaseUserId = userId;
   return database;
 }
 
 async function stopSync() {
+  if (disposeChangeListener) {
+    disposeChangeListener();
+    disposeChangeListener = null;
+  }
+  window.removeEventListener("estudos:data-saved", onLocalDataSaved);
   if (database && syncing) {
     await database.disconnect();
     syncing = false;
@@ -78,13 +87,13 @@ async function startSync(session) {
   startingUserId = session.user.id;
   try {
     await loadPowerSyncModules();
-    const db = createDatabase();
+    await stopSync();
+    const db = createDatabase(session.user.id);
     connector = new SupabasePowerSyncConnector({
       supabase,
       endpoint: config.powersyncUrl
     });
 
-    await stopSync();
     const connection = db.connect(connector);
     syncing = true;
     connection.catch(error => {
@@ -122,8 +131,24 @@ async function startSync(session) {
     }
 
     localStorage.setItem(ownerKey, session.user.id);
-    window.removeEventListener("estudos:data-saved", onLocalDataSaved);
     window.addEventListener("estudos:data-saved", onLocalDataSaved);
+    disposeChangeListener = db.onChange({
+      onChange: async () => {
+        if (applyingPowerSyncChanges) return;
+        applyingPowerSyncChanges = true;
+        suppressLocalEvents = true;
+        try {
+          const latest = await snapshotTools.readPowerSyncSnapshot(db);
+          window.EstudosBridge?.replaceSnapshot?.(latest);
+        } catch (error) {
+          console.error("PowerSync remote update could not be applied:", error);
+          showMessage("Atualização recebida, mas a tela não foi atualizada: " + error.message, "error");
+        } finally {
+          suppressLocalEvents = false;
+          applyingPowerSyncChanges = false;
+        }
+      }
+    }, { tables: ["courses", "modules", "lessons", "review_cards", "resources"], throttleMs: 350 });
     showMessage("Sincronização ativa. Dados locais e remotos conciliados.", "success");
   } catch (error) {
     console.error("PowerSync initialization failed:", error);
