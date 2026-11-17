@@ -1,6 +1,6 @@
 (() => {
 "use strict";
-const KEY="estudos-ava-v2", VERSION="2.0.0";
+const KEY="estudos-ava-v2", VERSION="2.1.0";
 const STATUS={planned:["Não iniciado","muted"],studying:["Estudando","blue"],practicing:["Praticando","violet"],learned:["Aprendido","green"],mastered:["Consolidado","green"],review:["Em revisão","amber"]};
 const LABEL={inicio:"Visão geral",cursos:"Meus cursos",revisoes:"Revisões",biblioteca:"Biblioteca",progresso:"Meu progresso"};
 const $=(s,r=document)=>r.querySelector(s), id=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7), today=()=>new Date().toISOString().slice(0,10);
