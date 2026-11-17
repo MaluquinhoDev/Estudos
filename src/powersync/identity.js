@@ -37,7 +37,8 @@ export function saveUserSnapshot(storage, userId, snapshot) {
 export function preserveWorkspace(storage, snapshot, currentUserId = null) {
   const ownerId = currentUserId || storage.getItem(OWNER_KEY);
   if (ownerId) {
-    saveUserSnapshot(storage, ownerId, snapshot);
+    const existing = parseSnapshot(storage.getItem(userSnapshotKey(ownerId)));
+    if (hasData(snapshot) || !existing) saveUserSnapshot(storage, ownerId, snapshot);
   } else if (parseSnapshot(snapshot) && hasData(snapshot)) {
     storage.setItem(GUEST_KEY, JSON.stringify(snapshot));
   }
