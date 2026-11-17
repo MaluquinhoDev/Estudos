@@ -2,6 +2,13 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   base: "./",
+  optimizeDeps: {
+    // PowerSync contains Web Workers and WASM modules; keep it out of pre-bundling.
+    exclude: ["@powersync/web"]
+  },
+  worker: {
+    format: "es"
+  },
   build: {
     outDir: "dist",
     emptyOutDir: true,
