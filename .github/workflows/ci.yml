@@ -32,6 +32,7 @@ jobs:
           test -f docs/AVA-ARQUITETURA.md
           test -f docs/PROXIMAS-ETAPAS-ARQUITETURAIS.md
           test -f docs/EXECUCAO-FASE-0.md
+          test -f docs/PESQUISA-FRONTEND-E-MOTOR-PEDAGOGICO.md
       - name: Validate architecture roadmap
         run: |
           node <<'NODE'
@@ -54,6 +55,29 @@ jobs:
           }
           for (const token of ['Fase 0A', 'Fase 0B', 'A→logout→B', 'CRUD queue', 'pgTAP']) {
             if (!phaseZero.includes(token)) throw new Error('Phase 0 execution plan is missing: ' + token);
+          }
+          NODE
+      - name: Validate pedagogical research specification
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const research = fs.readFileSync('docs/PESQUISA-FRONTEND-E-MOTOR-PEDAGOGICO.md', 'utf8');
+          const roadmap = fs.readFileSync('docs/PROXIMAS-ETAPAS-ARQUITETURAIS.md', 'utf8');
+          for (const token of [
+            'Auditoria do frontend atual',
+            'Ferramentas para construir conhecimento',
+            'Ferramentas para avaliar conhecimento',
+            'learning_objectives',
+            'attempts',
+            'mastery_records',
+            'prefers-reduced-motion',
+            'H5P',
+            'Status:** pesquisa e especificação documentadas'
+          ]) {
+            if (!research.includes(token)) throw new Error('Pedagogical specification is missing: ' + token);
+          }
+          if (!roadmap.includes('PESQUISA-FRONTEND-E-MOTOR-PEDAGOGICO.md')) {
+            throw new Error('Architecture roadmap must link the pedagogical research');
           }
           NODE
       - name: Validate JavaScript syntax
