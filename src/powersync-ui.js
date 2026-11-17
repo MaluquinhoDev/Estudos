@@ -24,11 +24,14 @@ let suppressLocalEvents = false;
 let applyingPowerSyncChanges = false;
 let syncQueue = Promise.resolve();
 let sessionGeneration = 0;
-const OWNER_KEY = "estudos-ava-owner";
-const GUEST_KEY = "estudos-ava-guest-v2";
-const USER_KEY_PREFIX = "estudos-ava-v2:user:";
-const emptySnapshot = () => ({ schemaVersion: 2, courses: [], cards: [], resources: [] });
-const userSnapshotKey = userId => USER_KEY_PREFIX + encodeURIComponent(userId);
+import {
+  OWNER_KEY,
+  emptySnapshot,
+  loadGuestSnapshot,
+  loadUserSnapshot,
+  preserveWorkspace,
+  saveUserSnapshot
+} from "./powersync/identity.js";
 
 function hideWorkspace() {
   window.EstudosBridge?.setIdentityPending?.();
@@ -39,48 +42,21 @@ function revealWorkspace() {
 }
 
 function persistWorkspaceSnapshot(userId, snapshot) {
-  if (!userId || !snapshot) return;
-  localStorage.setItem(userSnapshotKey(userId), JSON.stringify(snapshot));
+  saveUserSnapshot(localStorage, userId, snapshot);
 }
 
 function isolateCurrentWorkspace() {
   const snapshot = window.EstudosBridge?.getSnapshot?.() || emptySnapshot();
-  const storedOwner = localStorage.getItem(OWNER_KEY);
-  const activeOwner = currentUser?.id || storedOwner;
-  if (activeOwner) {
-    persistWorkspaceSnapshot(activeOwner, snapshot);
-  } else if (snapshotTools?.hasSnapshotData(snapshot) || snapshot.courses?.length || snapshot.cards?.length || snapshot.resources?.length) {
-    localStorage.setItem(GUEST_KEY, JSON.stringify(snapshot));
-  }
-  localStorage.removeItem(OWNER_KEY);
+  preserveWorkspace(localStorage, snapshot, currentUser?.id || null);
   window.EstudosBridge?.clearSnapshot?.();
 }
 
 function restoreGuestWorkspace() {
-  let guest = emptySnapshot();
-  try {
-    const stored = localStorage.getItem(GUEST_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed?.schemaVersion === 2 && Array.isArray(parsed.courses) && Array.isArray(parsed.cards) && Array.isArray(parsed.resources)) guest = parsed;
-    }
-  } catch (error) {
-    console.warn("Guest snapshot could not be restored:", error);
-  }
-  window.EstudosBridge?.replaceSnapshot?.(guest);
+  window.EstudosBridge?.replaceSnapshot?.(loadGuestSnapshot(localStorage));
 }
 
 function readUserWorkspace(userId) {
-  try {
-    const stored = localStorage.getItem(userSnapshotKey(userId));
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      if (parsed?.schemaVersion === 2 && Array.isArray(parsed.courses) && Array.isArray(parsed.cards) && Array.isArray(parsed.resources)) return parsed;
-    }
-  } catch (error) {
-    console.warn("User snapshot could not be restored:", error);
-  }
-  return emptySnapshot();
+  return loadUserSnapshot(localStorage, userId);
 }
 
 function showMessage(text, kind = "info") {
@@ -325,6 +301,7 @@ if (!configured()) {
   });
 
   supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === "INITIAL_SESSION") return;
     if (event === "SIGNED_OUT" || !session?.user) {
       hideWorkspace();
       isolateCurrentWorkspace();
