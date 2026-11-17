@@ -269,7 +269,7 @@ async function authenticate(event) {
       return;
     }
     dialog.close();
-    await startSync(result.data.session);
+    // The SIGNED_IN auth event owns session initialization to avoid duplicate startup races.
   } catch (error) {
     showMessage(error.message || "Falha de autenticação.", "error");
   } finally {
