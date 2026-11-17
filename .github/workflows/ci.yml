@@ -39,6 +39,7 @@ jobs:
           node --check src/powersync/schema.js
           node --check src/powersync/connector.js
           node --check src/powersync/snapshot.js
+          node --check tests/powersync-connector.test.js
       - name: Validate manifest
         run: node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8')); if (!m.name || !m.start_url || !m.icons?.length) process.exit(1)"
       - name: Validate AVA structure
@@ -132,6 +133,12 @@ jobs:
           }
           if (!fs.existsSync('supabase/diagnostics/ava_schema_preflight.sql')) {
             throw new Error('Read-only AVA schema preflight SQL is missing');
+          }
+          if (!fs.existsSync('supabase/diagnostics/ava_schema_audit.sql')) {
+            throw new Error('Read-only detailed AVA schema audit SQL is missing');
+          }
+          if (!connector.includes('.select("id")') || !connector.includes('result.data.length !== 1')) {
+            throw new Error('PATCH uploads must verify that exactly one owned row was updated before acknowledging the CRUD transaction');
           }
           if (connector.includes('service_role') || connector.includes('SUPABASE_DB_PASSWORD')) {
             throw new Error('Privileged database credentials must never be present in the browser connector');
