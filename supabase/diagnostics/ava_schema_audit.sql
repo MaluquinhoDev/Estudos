@@ -105,24 +105,26 @@ expected_grants(table_name, grantee, allowed) AS (
     ('lessons','anon', ARRAY[]::text[]), ('review_cards','anon', ARRAY[]::text[]),
     ('resources','anon', ARRAY[]::text[]),
     ('profiles','authenticated', ARRAY['SELECT','UPDATE']::text[]),
-    ('courses','authenticated', ARRAY['SELECT','INSERT','UPDATE','DELETE']::text[]),
-    ('modules','authenticated', ARRAY['SELECT','INSERT','UPDATE','DELETE']::text[]),
-    ('lessons','authenticated', ARRAY['SELECT','INSERT','UPDATE','DELETE']::text[]),
-    ('review_cards','authenticated', ARRAY['SELECT','INSERT','UPDATE','DELETE']::text[]),
-    ('resources','authenticated', ARRAY['SELECT','INSERT','UPDATE','DELETE']::text[])
+    ('courses','authenticated', ARRAY['DELETE','INSERT','SELECT','UPDATE']::text[]),
+    ('modules','authenticated', ARRAY['DELETE','INSERT','SELECT','UPDATE']::text[]),
+    ('lessons','authenticated', ARRAY['DELETE','INSERT','SELECT','UPDATE']::text[]),
+    ('review_cards','authenticated', ARRAY['DELETE','INSERT','SELECT','UPDATE']::text[]),
+    ('resources','authenticated', ARRAY['DELETE','INSERT','SELECT','UPDATE']::text[])
 ),
 grants_audit AS (
   SELECT 'GRANT'::text AS section, e.table_name, e.grantee AS object_name,
     COALESCE(array_to_string((
       SELECT array_agg(privilege ORDER BY privilege)
-      FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']::text[]) privilege
-      WHERE has_table_privilege(e.grantee, format('public.%I',e.table_name), privilege)
+      FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']::text[]) privilege
+      WHERE (privilege <> 'MAINTAIN' OR current_setting('server_version_num')::integer >= 170000)
+        AND has_table_privilege(e.grantee, format('public.%I',e.table_name), privilege)
     ), ', '), 'NONE') AS actual,
     COALESCE(array_to_string(e.allowed, ', '), 'NONE') AS expected,
     CASE WHEN COALESCE((
       SELECT array_agg(privilege ORDER BY privilege)
-      FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']::text[]) privilege
-      WHERE has_table_privilege(e.grantee, format('public.%I',e.table_name), privilege)
+      FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']::text[]) privilege
+      WHERE (privilege <> 'MAINTAIN' OR current_setting('server_version_num')::integer >= 170000)
+        AND has_table_privilege(e.grantee, format('public.%I',e.table_name), privilege)
     ), ARRAY[]::text[]) = e.allowed THEN 'PASS' ELSE 'FAIL' END AS status
   FROM expected_grants e
 )
