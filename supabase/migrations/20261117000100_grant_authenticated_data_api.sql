@@ -2,8 +2,9 @@
 -- RLS remains enabled and is the authorization boundary for every row.
 -- This migration grants table privileges only; it does not bypass RLS.
 
+grant select, update on table public.profiles to authenticated;
+
 grant select, insert, update, delete on table
-  public.profiles,
   public.courses,
   public.modules,
   public.lessons,
