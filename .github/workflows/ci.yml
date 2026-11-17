@@ -30,6 +30,27 @@ jobs:
           test -f manifest.webmanifest
           test -f icons/icon.svg
           test -f docs/AVA-ARQUITETURA.md
+          test -f docs/PROXIMAS-ETAPAS-ARQUITETURAIS.md
+      - name: Validate architecture roadmap
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const roadmap = fs.readFileSync('docs/PROXIMAS-ETAPAS-ARQUITETURAIS.md', 'utf8');
+          for (const token of [
+            'Etapa 0',
+            'Etapa 1',
+            'Etapa 2',
+            'Etapa 3',
+            'Etapa 4',
+            'Etapa 5',
+            'Etapa 6',
+            'CRUD queue',
+            'localStorage',
+            'RLS'
+          ]) {
+            if (!roadmap.includes(token)) throw new Error('Architecture roadmap is missing: ' + token);
+          }
+          NODE
       - name: Validate JavaScript syntax
         run: |
           node --check app.js
