@@ -8,7 +8,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const dateAdd=(d,n)=>{let x=new Date(d+"T12:00:00");x.setDate(x.getDate()+n);return x.toISOString().slice(0,10)};
 let data=load(), view="inicio", courseOpen=null, revealed=false, toastTimer;
 function load(){try{let x=JSON.parse(localStorage.getItem(KEY));if(x?.schemaVersion===2&&Array.isArray(x.courses))return x}catch(e){console.warn(e)}return{schemaVersion:2,courses:[],cards:[],resources:[]}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(data));$("#review-count").textContent=due().length}catch(e){toast("Falha ao salvar. Exporte um backup e libere espaço.")}}
+function save(){try{const snapshot=JSON.stringify(data);localStorage.setItem(KEY,snapshot);$("#review-count").textContent=due().length;window.dispatchEvent(new CustomEvent("estudos:data-saved",{detail:JSON.parse(snapshot)}))}catch(e){toast("Falha ao salvar. Exporte um backup e libere espaço.")}}
 function toast(s){let el=$("#toast");el.textContent=s;el.classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove("show"),2600)}
 function lessons(){return data.courses.flatMap(c=>(c.modules||[]).flatMap(m=>(m.lessons||[]).map(l=>({...l,courseId:c.id,courseTitle:c.title,moduleId:m.id}))))}
 function due(){return data.cards.filter(c=>!c.due||c.due<=today()).sort((a,b)=>(a.due||"").localeCompare(b.due||""))}
@@ -46,6 +46,7 @@ if(t==="new-course")newCourse();if(t==="new-module")newModule(a.dataset.course||
 $("#import-file").addEventListener("change",e=>{if(e.target.files[0])importData(e.target.files[0]);e.target.value=""});
 function connection(){let online=navigator.onLine;$("#connection-status").textContent=online?"Conectado":"Modo offline";$("#connection-dot").classList.toggle("offline",!online)}
 window.addEventListener("online",connection);window.addEventListener("offline",connection);
+window.EstudosBridge={getSnapshot:()=>JSON.parse(JSON.stringify(data)),replaceSnapshot:next=>{if(!next||next.schemaVersion!==2||!Array.isArray(next.courses)||!Array.isArray(next.cards)||!Array.isArray(next.resources))throw new Error("Snapshot remoto inválido");data=next;save();setView("inicio")}};
 $("#today-label").textContent=new Date().toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"short"});$("#app-version").textContent="v"+VERSION;connection();render();
 if("serviceWorker"in navigator)addEventListener("load",async()=>{try{let r=await navigator.serviceWorker.register("./service-worker.js",{scope:"./",updateViaCache:"none"});if(r.waiting&&navigator.serviceWorker.controller)r.waiting.postMessage({type:"SKIP_WAITING"});await r.update()}catch(e){console.warn(e)}});
 })();
