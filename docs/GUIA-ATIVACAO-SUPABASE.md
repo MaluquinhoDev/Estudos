@@ -27,7 +27,7 @@ Este documento separa código já enviado ao repositório de serviços externos 
 
 ## 2. Etapa obrigatória — conferir o banco Supabase
 
-A migração nova `supabase/migrations/20261117000100_grant_authenticated_data_api.sql` concede privilégios do Data API ao papel `authenticated`, mantendo RLS ativa.
+A migration `supabase/migrations/20261117000050_create_ava_schema.sql` cria as seis tabelas do AVA, índices, chaves estrangeiras e políticas RLS. Ela foi ordenada antes de `20261117000100_grant_authenticated_data_api.sql`, que concede os privilégios do Data API ao papel `authenticated`. O GitHub Actions valida a estrutura desses arquivos; ele não aplica SQL no banco remoto.
 
 Antes de ativar o deploy automático:
 1. Abra o [Dashboard Supabase](https://supabase.com/dashboard/project/bkhrxosiumviprnhlbim).
