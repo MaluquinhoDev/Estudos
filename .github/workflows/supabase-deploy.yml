@@ -1,72 +1,78 @@
-name: Supabase - Validate and deploy database migrations
+name: Supabase - Validate migration files
 
 on:
-  # Deploy automatically after changes reach main.
   push:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'supabase/migrations/**'
       - 'supabase/config.toml'
       - '.github/workflows/supabase-deploy.yml'
-  # Keep manual execution available for controlled reruns.
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/supabase-deploy.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: supabase-production-migrations
-  cancel-in-progress: false
+  group: supabase-migration-validation-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: Validate and deploy migrations
+  validate:
+    name: Validate migration structure
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-
+    timeout-minutes: 5
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check required configuration
-        shell: bash
-        run: |
-          missing=0
-          for name in SUPABASE_ACCESS_TOKEN SUPABASE_PROJECT_ID SUPABASE_DB_PASSWORD; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Missing GitHub Actions secret: $name"
-              missing=1
-            fi
-          done
-          if [ "$missing" -ne 0 ]; then
-            echo "Configure the required secrets using docs/GUIA-ATIVACAO-SUPABASE.md."
-            exit 1
-          fi
-
-      - name: Check migration files
+      - name: Validate Supabase configuration
         shell: bash
         run: |
           test -f supabase/config.toml || { echo "::error::supabase/config.toml is missing"; exit 1; }
-          if ! find supabase/migrations -maxdepth 1 -type f -name '*.sql' | grep -q .; then
-            echo "::error::No SQL migration files found."
+          grep -Fq 'project_id = "bkhrxosiumviprnhlbim"' supabase/config.toml || {
+            echo "::error::Unexpected Supabase project_id"
+            exit 1
+          }
+
+      - name: Validate migration filenames and contents
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(supabase/migrations/*.sql)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No SQL migrations found."
             exit 1
           fi
 
-      - name: Set up Supabase CLI
-        uses: supabase/setup-cli@v3
-        with:
-          version: 3.2.0
+          declare -A timestamps=()
+          for file in "${files[@]}"; do
+            name="${file##*/}"
+            if [[ ! "$name" =~ ^[0-9]{14}_[a-z0-9_]+\.sql$ ]]; then
+              echo "::error file=$file::Migration filename must use YYYYMMDDHHMMSS_description.sql"
+              exit 1
+            fi
+            stamp="${name:0:14}"
+            if [[ -n "${timestamps[$stamp]:-}" ]]; then
+              echo "::error file=$file::Duplicate migration timestamp: $stamp"
+              exit 1
+            fi
+            timestamps[$stamp]=1
+            if [ ! -s "$file" ]; then
+              echo "::error file=$file::Migration file is empty"
+              exit 1
+            fi
+          done
 
-      - name: Link Supabase project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+          printf 'Validated %s migration file(s).\n' "${#files[@]}"
 
-      - name: Preview remote migrations
-        run: supabase db push --dry-run --remote --password "$SUPABASE_DB_PASSWORD"
-
-      - name: Apply reviewed migrations
-        run: supabase db push --yes --remote --password "$SUPABASE_DB_PASSWORD"
+      - name: Explain deployment ownership
+        run: |
+          echo "This workflow validates repository files only."
+          echo "Production migrations are deployed by the Supabase GitHub Integration after it is configured and enabled."
+          echo "No database credentials are used and no remote database changes are made here."
