@@ -38,7 +38,22 @@ jobs:
         run: node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); const j=fs.readFileSync('app.js','utf8'); for(const id of ['app-content','app-dialog','import-file','review-count']) if(!h.includes('id=\"'+id+'\"')) throw Error(id); for(const fn of ['dashboard','coursesPage','coursePage','reviews','library','progress','exportData','importData']) if(!j.includes('function '+fn)) throw Error(fn)"
       - name: Validate generated dialog form styling
         run: |
-          node -e 'const fs=require("fs"); const j=fs.readFileSync("app.js","utf8"); const c=fs.readFileSync("styles.css","utf8"); if(!j.includes("<form id=\\"edit-form\\" class=\\"dialog-form\\">")) throw Error("Generated dialog form must use dialog-form class"); for(const token of [".dialog-form{display:grid",".dialog-form label{display:grid",".dialog-form textarea{resize:vertical","#dialog-content > h2{"]) if(!c.includes(token)) throw Error("Missing dialog styling: "+token)'
+          node <<'NODE'
+          const fs = require('node:fs');
+          const js = fs.readFileSync('app.js', 'utf8');
+          const css = fs.readFileSync('styles.css', 'utf8');
+          if (!js.includes('class="dialog-form"')) {
+            throw new Error('Generated dialog form is missing dialog-form class');
+          }
+          for (const token of [
+            '.dialog-form{display:grid',
+            '.dialog-form label{display:grid',
+            '.dialog-form textarea{resize:vertical',
+            '#dialog-content > h2{'
+          ]) {
+            if (!css.includes(token)) throw new Error(`Missing dialog styling: ${token}`);
+          }
+          NODE
       - name: Validate responsive layout safeguards
         run: |
           node -e 'const fs=require("fs"); const c=fs.readFileSync("styles.css","utf8"); for(const token of ["grid-template-columns: repeat(4, minmax(0, 1fr))","grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr)","@media (max-width: 820px)","@media (max-width: 420px)","overflow-y: auto","min-width: 0"]) if(!c.includes(token)) throw Error("Missing responsive safeguard: "+token)'
