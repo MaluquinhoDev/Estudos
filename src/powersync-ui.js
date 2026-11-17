@@ -8,7 +8,6 @@ const panel = document.querySelector("#sync-panel");
 const dialog = document.querySelector("#sync-dialog");
 const form = document.querySelector("#sync-auth-form");
 const message = document.querySelector("#sync-message");
-const account = document.querySelector("#sync-account");
 const submit = document.querySelector("#sync-submit");
 let database;
 let databaseUserId = null;
@@ -163,8 +162,14 @@ async function startSync(session) {
 function onLocalDataSaved(event) {
   if (!syncing || suppressLocalEvents) return;
   const snapshot = event.detail;
+  const ownerId = currentUser?.id;
+  const targetDatabase = database;
+  if (!ownerId || !targetDatabase) return;
   syncQueue = syncQueue
-    .then(() => snapshotTools.writeSnapshotToPowerSync(database, snapshot, currentUser.id))
+    .then(() => {
+      if (currentUser?.id !== ownerId || database !== targetDatabase || !syncing) return;
+      return snapshotTools.writeSnapshotToPowerSync(targetDatabase, snapshot, ownerId);
+    })
     .catch(error => {
       console.error("PowerSync local write failed:", error);
       showMessage("Alteração salva neste aparelho; sincronização pendente: " + error.message, "error");
