@@ -61,12 +61,15 @@ export function snapshotToRows(snapshot, userId) {
   }
 
   const courseByLesson = new Map(lessons.map(lesson => [lesson.id, lesson.course_id]));
-  const review_cards = (snapshot?.cards || []).map(card => ({
+  const courseTitleById = new Map(courses.map(course => [course.id, course.title]));
+  const review_cards = (snapshot?.cards || []).map(card => {
+    const courseId = courseByLesson.get(card.lessonId) || card.courseId || null;
+    return ({
     id: asText(card.id),
     user_id: userId,
-    course_id: card.courseId || courseByLesson.get(card.lessonId) || null,
+    course_id: courseId,
     lesson_id: card.lessonId || null,
-    course_title: asText(card.courseTitle),
+    course_title: asText(courseTitleById.get(courseId) || card.courseTitle),
     front: asText(card.front),
     back: asText(card.back),
     due: card.due || null,
@@ -75,7 +78,8 @@ export function snapshotToRows(snapshot, userId) {
     last_reviewed: card.lastReviewed || null,
     created_at: card.createdAt || stamp,
     updated_at: card.updatedAt || card.createdAt || stamp
-  }));
+  });
+  });
 
   const resources = (snapshot?.resources || []).map(resource => ({
     id: asText(resource.id),
