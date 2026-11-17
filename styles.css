@@ -190,3 +190,30 @@ dialog {
     flex-wrap: wrap;
   }
 }
+
+
+/* Mobile authoring: readable controls, reliable touch targets and keyboard-safe dialogs. */
+button,a,select,input,textarea{-webkit-tap-highlight-color:transparent}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #8dd7c2;outline-offset:3px}
+.dialog-form label{font-size:.875rem;line-height:1.4}
+.dialog-form input,.dialog-form textarea,.dialog-form select{min-height:48px;padding:12px;font-size:16px;line-height:1.4}
+.dialog-form textarea{min-height:104px}
+.dialog-actions{position:sticky;bottom:-1px;z-index:1;padding-top:12px;padding-bottom:2px;background:#172536}
+.primary,.secondary,.ratings button{min-height:44px}
+.link{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:7px 8px}
+.lesson-tools select{min-height:44px;font-size:16px}
+dialog{max-width:calc(100% - 24px);max-height:min(90vh,720px);max-height:min(90dvh,720px);overscroll-behavior:contain;scrollbar-gutter:stable}
+@media(max-width:680px){
+.dialog-form{gap:16px}
+.dialog-form label{font-size:.9rem}
+.dialog-form input,.dialog-form textarea,.dialog-form select{min-height:48px;padding:12px;font-size:16px}
+.dialog-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:8px}
+.dialog-actions button{width:100%;min-height:48px}
+dialog{width:calc(100% - 20px);max-width:520px;max-height:min(88vh,720px);max-height:min(88dvh,720px);padding:18px;margin:auto}
+.nav{min-height:44px}
+.summary .link,.module header .link{min-height:44px}
+}
+@media(max-width:420px){
+dialog{width:calc(100% - 16px);padding:15px}
+.dialog-actions{grid-template-columns:1fr}
+}
