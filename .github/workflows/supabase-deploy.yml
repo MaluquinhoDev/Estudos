@@ -53,13 +53,13 @@ jobs:
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v3
         with:
-          version: 3.0.0
+          version: 3.2.0
 
       - name: Link Supabase project
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
 
       - name: Preview remote migrations
-        run: supabase db push --dry-run --remote
+        run: supabase db push --dry-run --remote --password "$SUPABASE_DB_PASSWORD"
 
       - name: Apply reviewed migrations
-        run: supabase db push --yes --remote
+        run: supabase db push --yes --remote --password "$SUPABASE_DB_PASSWORD"
