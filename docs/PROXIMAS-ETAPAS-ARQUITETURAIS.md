@@ -324,3 +324,7 @@ Entregas verificáveis no código:
 - testes unitários e validação CI desses contratos.
 
 **Não concluído:** a UI ainda usa localStorage operacional e a ponte ainda recebe snapshots completos; faltam repositórios por entidade, teste com SQLite/PowerSync real, teste de duas contas no navegador, Supabase local e sincronização Cloud. Esta entrega não conclui a Fase 0B nem altera o banco remoto.
+
+## 11. Guia operacional detalhado do backend
+
+As configurações manuais do Supabase, PowerSync Cloud, Sync Streams, GitHub Actions Variables, reconciliação de migrations e testes de integração estão organizadas em [GUIA-PROXIMAS-ETAPAS-BACKEND.md](./GUIA-PROXIMAS-ETAPAS-BACKEND.md). O guia distingue tarefas manuais, código já implementado e validações ainda pendentes; não autoriza alterações remotas sem backup e revisão.
