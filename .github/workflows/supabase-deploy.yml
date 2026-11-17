@@ -1,8 +1,15 @@
 name: Supabase - Validate and deploy database migrations
 
 on:
-  # First deployment is intentionally manual. Review the remote schema before
-  # applying the initial AVA migration to avoid colliding with existing tables.
+  # Deploy automatically after changes reach main.
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/supabase-deploy.yml'
+  # Keep manual execution available for controlled reruns.
   workflow_dispatch:
 
 permissions:
