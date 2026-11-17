@@ -23,6 +23,65 @@ let syncing = false;
 let suppressLocalEvents = false;
 let applyingPowerSyncChanges = false;
 let syncQueue = Promise.resolve();
+let sessionGeneration = 0;
+const OWNER_KEY = "estudos-ava-owner";
+const GUEST_KEY = "estudos-ava-guest-v2";
+const USER_KEY_PREFIX = "estudos-ava-v2:user:";
+const emptySnapshot = () => ({ schemaVersion: 2, courses: [], cards: [], resources: [] });
+const userSnapshotKey = userId => USER_KEY_PREFIX + encodeURIComponent(userId);
+
+function hideWorkspace() {
+  window.EstudosBridge?.setIdentityPending?.();
+}
+
+function revealWorkspace() {
+  window.EstudosBridge?.setIdentityReady?.();
+}
+
+function persistWorkspaceSnapshot(userId, snapshot) {
+  if (!userId || !snapshot) return;
+  localStorage.setItem(userSnapshotKey(userId), JSON.stringify(snapshot));
+}
+
+function isolateCurrentWorkspace() {
+  const snapshot = window.EstudosBridge?.getSnapshot?.() || emptySnapshot();
+  const storedOwner = localStorage.getItem(OWNER_KEY);
+  const activeOwner = currentUser?.id || storedOwner;
+  if (activeOwner) {
+    persistWorkspaceSnapshot(activeOwner, snapshot);
+  } else if (snapshotTools?.hasSnapshotData(snapshot) || snapshot.courses?.length || snapshot.cards?.length || snapshot.resources?.length) {
+    localStorage.setItem(GUEST_KEY, JSON.stringify(snapshot));
+  }
+  localStorage.removeItem(OWNER_KEY);
+  window.EstudosBridge?.clearSnapshot?.();
+}
+
+function restoreGuestWorkspace() {
+  let guest = emptySnapshot();
+  try {
+    const stored = localStorage.getItem(GUEST_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed?.schemaVersion === 2 && Array.isArray(parsed.courses) && Array.isArray(parsed.cards) && Array.isArray(parsed.resources)) guest = parsed;
+    }
+  } catch (error) {
+    console.warn("Guest snapshot could not be restored:", error);
+  }
+  window.EstudosBridge?.replaceSnapshot?.(guest);
+}
+
+function readUserWorkspace(userId) {
+  try {
+    const stored = localStorage.getItem(userSnapshotKey(userId));
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed?.schemaVersion === 2 && Array.isArray(parsed.courses) && Array.isArray(parsed.cards) && Array.isArray(parsed.resources)) return parsed;
+    }
+  } catch (error) {
+    console.warn("User snapshot could not be restored:", error);
+  }
+  return emptySnapshot();
+}
 
 function showMessage(text, kind = "info") {
   if (message) {
@@ -69,7 +128,8 @@ function createDatabase(userId) {
   return database;
 }
 
-async function stopSync() {
+async function stopSync({ invalidate = true } = {}) {
+  if (invalidate) sessionGeneration += 1;
   if (disposeChangeListener) {
     disposeChangeListener();
     disposeChangeListener = null;
@@ -83,11 +143,16 @@ async function stopSync() {
 
 async function startSync(session) {
   if (startingUserId === session.user.id) return;
-  startingUserId = session.user.id;
+  const userId = session.user.id;
+  const generation = ++sessionGeneration;
+  const isCurrentSession = () => generation === sessionGeneration && currentUser?.id === userId;
+  startingUserId = userId;
   try {
     await loadPowerSyncModules();
-    await stopSync();
-    const db = createDatabase(session.user.id);
+    if (!isCurrentSession()) return;
+    await stopSync({ invalidate: false });
+    if (!isCurrentSession()) return;
+    const db = createDatabase(userId);
     connector = new SupabasePowerSyncConnector({
       supabase,
       endpoint: config.powersyncUrl
@@ -96,21 +161,17 @@ async function startSync(session) {
     const connection = db.connect(connector);
     syncing = true;
     connection.catch(error => {
+      if (!isCurrentSession()) return;
       console.error("PowerSync connection failed:", error);
       showMessage("Conexão PowerSync interrompida: " + error.message, "error");
     });
     showMessage("Conectando ao banco local e sincronizando…");
 
     await db.waitForFirstSync();
+    if (!isCurrentSession()) return;
     const remote = await snapshotTools.readPowerSyncSnapshot(db);
-    const local = window.EstudosBridge?.getSnapshot?.() || {
-      schemaVersion: 2, courses: [], cards: [], resources: []
-    };
-    const ownerKey = "estudos-ava-owner";
-    const previousOwner = localStorage.getItem(ownerKey);
-    if (previousOwner && previousOwner !== session.user.id && snapshotTools.hasSnapshotData(local)) {
-      throw new Error("Os dados locais pertencem a outra conta. Exporte o backup antes de trocar de usuário e limpe os dados locais para iniciar uma conta diferente.");
-    }
+    if (!isCurrentSession()) return;
+    const local = readUserWorkspace(userId);
 
     let merged;
     if (!snapshotTools.hasSnapshotData(remote)) {
@@ -123,21 +184,26 @@ async function startSync(session) {
 
     suppressLocalEvents = true;
     try {
-      await snapshotTools.writeSnapshotToPowerSync(db, merged, session.user.id);
+      await snapshotTools.writeSnapshotToPowerSync(db, merged, userId);
+      if (!isCurrentSession()) return;
+      persistWorkspaceSnapshot(userId, merged);
       window.EstudosBridge?.replaceSnapshot?.(merged);
     } finally {
       suppressLocalEvents = false;
     }
 
-    localStorage.setItem(ownerKey, session.user.id);
+    if (!isCurrentSession()) return;
+    localStorage.setItem(OWNER_KEY, userId);
     window.addEventListener("estudos:data-saved", onLocalDataSaved);
     disposeChangeListener = db.onChange({
       onChange: async () => {
-        if (applyingPowerSyncChanges) return;
+        if (!isCurrentSession() || applyingPowerSyncChanges) return;
         applyingPowerSyncChanges = true;
         suppressLocalEvents = true;
         try {
           const latest = await snapshotTools.readPowerSyncSnapshot(db);
+          if (!isCurrentSession()) return;
+          persistWorkspaceSnapshot(userId, latest);
           window.EstudosBridge?.replaceSnapshot?.(latest);
         } catch (error) {
           console.error("PowerSync remote update could not be applied:", error);
@@ -149,13 +215,16 @@ async function startSync(session) {
       }
     }, { tables: ["courses", "modules", "lessons", "review_cards", "resources"], throttleMs: 350 });
     showMessage("Sincronização ativa. Dados locais e remotos conciliados.", "success");
+    revealWorkspace();
   } catch (error) {
-    console.error("PowerSync initialization failed:", error);
-    showMessage("Sincronização pausada para proteger seus dados: " + error.message, "error");
-    await stopSync();
+    if (isCurrentSession()) {
+      console.error("PowerSync initialization failed:", error);
+      showMessage("Sincronização pausada para proteger seus dados: " + error.message, "error");
+      await stopSync({ invalidate: false });
+    }
     throw error;
   } finally {
-    startingUserId = null;
+    if (startingUserId === userId) startingUserId = null;
   }
 }
 
@@ -165,6 +234,7 @@ function onLocalDataSaved(event) {
   const ownerId = currentUser?.id;
   const targetDatabase = database;
   if (!ownerId || !targetDatabase) return;
+  persistWorkspaceSnapshot(ownerId, snapshot);
   syncQueue = syncQueue
     .then(() => {
       if (currentUser?.id !== ownerId || database !== targetDatabase || !syncing) return;
@@ -232,7 +302,10 @@ async function authenticate(event) {
 }
 
 if (!configured()) {
+  isolateCurrentWorkspace();
+  restoreGuestWorkspace();
   setPanel('<small class="sync-caption">Sincronização ainda não configurada</small>');
+  revealWorkspace();
 } else if (!panel || !dialog || !form || !message || !submit) {
   console.error("PowerSync UI elements are missing from index.html");
 } else {
@@ -252,19 +325,26 @@ if (!configured()) {
   });
 
   supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === "SIGNED_OUT") {
+    if (event === "SIGNED_OUT" || !session?.user) {
+      hideWorkspace();
+      isolateCurrentWorkspace();
       currentUser = null;
       await stopSync();
+      restoreGuestWorkspace();
       renderSignedOut();
+      revealWorkspace();
       return;
     }
-    if (session?.user && currentUser?.id !== session.user.id) {
+    if (currentUser?.id !== session.user.id) {
+      hideWorkspace();
+      isolateCurrentWorkspace();
       currentUser = session.user;
       renderSignedIn(currentUser);
       try {
         await startSync(session);
       } catch {
-        // The error is already shown without clearing either local or remote data.
+        window.EstudosBridge?.clearSnapshot?.();
+        revealWorkspace();
       }
     }
   });
@@ -272,18 +352,28 @@ if (!configured()) {
   supabase.auth.getSession().then(async ({ data, error }) => {
     if (error) {
       showMessage(error.message, "error");
+      isolateCurrentWorkspace();
+      restoreGuestWorkspace();
+      renderSignedOut();
+      revealWorkspace();
       return;
     }
     if (data.session?.user) {
+      hideWorkspace();
+      isolateCurrentWorkspace();
       currentUser = data.session.user;
       renderSignedIn(currentUser);
       try {
         await startSync(data.session);
       } catch {
-        // The error is already shown without clearing either local or remote data.
+        window.EstudosBridge?.clearSnapshot?.();
+        revealWorkspace();
       }
     } else {
+      isolateCurrentWorkspace();
+      restoreGuestWorkspace();
       renderSignedOut();
+      revealWorkspace();
     }
   });
 }
