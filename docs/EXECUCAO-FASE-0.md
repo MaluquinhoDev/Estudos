@@ -1,6 +1,6 @@
 # AVA — plano de execução da Fase 0
 
-**Estado:** plano técnico; nenhuma alteração funcional da Fase 0 está declarada como concluída.  
+**Estado:** Fase 0A parcialmente implementada; primeira entrega técnica da Fase 0B publicada, ainda sem conclusão integral ou validação real em PowerSync Cloud.  
 **Base:** auditoria estática de app.js, src/powersync-ui.js, src/powersync/snapshot.js, src/powersync/connector.js e testes atuais.  
 **Ordem:** 0A (identidade e privacidade) antes de 0B (integridade de sincronização).
 
@@ -188,6 +188,45 @@ Mocks continuam úteis, mas não substituem os níveis de integração e banco.
 3. Não há teste de navegador automatizado que alterne duas contas Supabase reais no mesmo perfil e observe a tela em cada frame.
 4. Os testes adicionados validam as funções de armazenamento e a CI valida a estrutura do bootstrap; eles não simulam o ciclo completo do Supabase Auth nem o PowerSync Cloud.
 5. A migração explícita de dados legados para uma conta ainda não foi construída. Dados sem proprietário permanecem no espaço de visitante.
-6. A Fase 0B permanece pendente: exclusões explícitas, proteção contra snapshots obsoletos e transações locais coerentes ainda precisam de implementação.
+6. A Fase 0B recebeu uma primeira implementação parcial; os limites e itens ainda pendentes estão registrados na seção 10.
 
 **Status honesto:** primeira parte da Fase 0A implementada; Fase 0A ainda não pode ser considerada integralmente concluída. Nenhuma migration foi aplicada ao projeto Supabase remoto nesta entrega.
+
+
+---
+
+## 10. Registro de execução — primeira entrega da Fase 0B
+
+**Implementação publicada:** 17/11/2026.  
+**Escopo:** substituir a escrita destrutiva por snapshots por um cálculo incremental de mutações, com exclusões explícitas, verificação otimista de concorrência e transação local única.
+
+### Problemas corrigidos nesta entrega
+
+1. A escrita de bootstrap/importação deixou de excluir linhas ausentes do snapshot. Um snapshot vazio ou parcial não apaga registros locais.
+2. Exclusões são calculadas apenas quando um registro existia na base conhecida e foi removido na nova versão.
+3. A leitura das linhas atuais passou para dentro de `writeTransaction()`, usando o contexto transacional do PowerSync.
+4. Atualizações locais são comparadas com a base anterior e com o conteúdo atual do SQLite. Uma edição remota concorrente gera conflito em vez de ser sobrescrita silenciosamente.
+5. Exclusões verificam se o conteúdo armazenado ainda corresponde à base anterior; alteração remota concorrente bloqueia a exclusão.
+6. Os DELETEs usam simultaneamente ID e user_id, e são executados em ordem inversa de dependência.
+7. Eventos locais passaram a carregar revisão monotônica. Eventos já obsoletos antes da execução são descartados; a revisão é verificada também durante a transação.
+8. Atualizações remotas não substituem a interface quando uma edição local ocorreu durante a leitura do snapshot remoto.
+
+### Arquivos alterados
+
+- `src/powersync/snapshot.js`: `planSnapshotChanges`, `applySnapshotChanges`, leitura transacional, escrita incremental e exclusões explícitas.
+- `src/powersync-ui.js`: base aplicada, controle de revisão, fila com descarte de eventos obsoletos e proteção da edição local durante atualização remota.
+- `app.js`: eventos `estudos:data-saved` agora carregam `snapshot` e `revision`.
+- `tests/powersync-snapshot.test.js`: testes para snapshots parciais, exclusão explícita, conflito concorrente, transação e evento obsoleto.
+- `.github/workflows/ci.yml`: validações estruturais e execução dos testes de sincronização.
+
+### Limites ainda abertos
+
+1. A interface continua usando `localStorage` como estado operacional; SQLite/PowerSync ainda não é a fonte primária de leitura da UI.
+2. A ponte de compatibilidade ainda recebe snapshots completos do app e calcula deltas. A extração dos casos de uso e repositórios por entidade ainda não foi concluída.
+3. Os testes atuais são unitários com um contexto transacional simulado. Não comprovam concorrência real no SQLite WASM/PowerSync, CRUD queue real ou sincronização PowerSync Cloud.
+4. A política de conflito nesta entrega é conservadora: detecta e bloqueia conflito; ainda não oferece resolução por campo nem interface para o usuário escolher versões.
+5. A exclusão remota é refletida pela leitura do banco; não há um protocolo de tombstones próprio, nem histórico auditável de exclusões.
+6. Ainda faltam testes de integração com PostgreSQL/Supabase local, duas identidades, navegador, offline/online e restauração.
+7. Nenhuma migration foi aplicada ao Supabase remoto.
+
+**Status honesto:** primeira parte da Fase 0B implementada e coberta por testes unitários. Não declarar a Fase 0B concluída, nem a sincronização ponta a ponta validada.
