@@ -60,10 +60,11 @@ export function snapshotToRows(snapshot, userId) {
     });
   }
 
+  const courseByLesson = new Map(lessons.map(lesson => [lesson.id, lesson.course_id]));
   const review_cards = (snapshot?.cards || []).map(card => ({
     id: asText(card.id),
     user_id: userId,
-    course_id: card.courseId || null,
+    course_id: card.courseId || courseByLesson.get(card.lessonId) || null,
     lesson_id: card.lessonId || null,
     course_title: asText(card.courseTitle),
     front: asText(card.front),
