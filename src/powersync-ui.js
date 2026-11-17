@@ -1,13 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { PowerSyncDatabase, WASQLiteVFS } from "@powersync/web";
-import { EstudosSchema } from "./powersync/schema.js";
-import { SupabasePowerSyncConnector } from "./powersync/connector.js";
-import {
-  hasSnapshotData,
-  mergeSnapshots,
-  readPowerSyncSnapshot,
-  writeSnapshotToPowerSync
-} from "./powersync/snapshot.js";
 
 const config = {
   supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
@@ -23,6 +14,12 @@ const account = document.querySelector("#sync-account");
 const submit = document.querySelector("#sync-submit");
 let database;
 let connector;
+let supabase;
+let PowerSyncDatabase;
+let WASQLiteVFS;
+let EstudosSchema;
+let SupabasePowerSyncConnector;
+let snapshotTools;
 let syncing = false;
 let suppressLocalEvents = false;
 let syncQueue = Promise.resolve();
@@ -39,6 +36,21 @@ function setPanel(html) {
 
 function configured() {
   return Boolean(config.supabaseUrl && config.supabaseKey && config.powersyncUrl);
+}
+
+async function loadPowerSyncModules() {
+  if (PowerSyncDatabase) return;
+  const [sdk, schema, connectorModule, snapshotModule] = await Promise.all([
+    import("@powersync/web"),
+    import("./powersync/schema.js"),
+    import("./powersync/connector.js"),
+    import("./powersync/snapshot.js")
+  ]);
+  PowerSyncDatabase = sdk.PowerSyncDatabase;
+  WASQLiteVFS = sdk.WASQLiteVFS;
+  EstudosSchema = schema.EstudosSchema;
+  SupabasePowerSyncConnector = connectorModule.SupabasePowerSyncConnector;
+  snapshotTools = snapshotModule;
 }
 
 function createDatabase() {
@@ -61,6 +73,9 @@ async function stopSync() {
 }
 
 async function startSync(session) {
+  if (startingUserId === session.user.id) return;
+  startingUserId = session.user.id;
+  await loadPowerSyncModules();
   const db = createDatabase();
   connector = new SupabasePowerSyncConnector({
     supabase,
@@ -68,29 +83,33 @@ async function startSync(session) {
   });
 
   await stopSync();
-  await db.connect(connector);
+  const connection = db.connect(connector);
   syncing = true;
+  connection.catch(error => {
+    console.error("PowerSync connection failed:", error);
+    showMessage("Conexão PowerSync interrompida: " + error.message, "error");
+  });
   showMessage("Conectando ao banco local e sincronizando…");
 
   try {
     await db.waitForFirstSync();
-    const remote = await readPowerSyncSnapshot(db);
+    const remote = await snapshotTools.readPowerSyncSnapshot(db);
     const local = window.EstudosBridge?.getSnapshot?.() || {
       schemaVersion: 2, courses: [], cards: [], resources: []
     };
 
     let merged;
-    if (!hasSnapshotData(remote)) {
+    if (!snapshotTools.hasSnapshotData(remote)) {
       merged = local;
-    } else if (!hasSnapshotData(local)) {
+    } else if (!snapshotTools.hasSnapshotData(local)) {
       merged = remote;
     } else {
-      merged = mergeSnapshots(local, remote, session.user.id);
+      merged = snapshotTools.mergeSnapshots(local, remote, session.user.id);
     }
 
     suppressLocalEvents = true;
     try {
-      await writeSnapshotToPowerSync(db, merged, session.user.id);
+      await snapshotTools.writeSnapshotToPowerSync(db, merged, session.user.id);
       window.EstudosBridge?.replaceSnapshot?.(merged);
     } finally {
       suppressLocalEvents = false;
@@ -103,6 +122,8 @@ async function startSync(session) {
     showMessage("Sincronização pausada para proteger seus dados: " + error.message, "error");
     await stopSync();
     throw error;
+  } finally {
+    startingUserId = null;
   }
 }
 
@@ -110,7 +131,7 @@ function onLocalDataSaved(event) {
   if (!syncing || suppressLocalEvents) return;
   const snapshot = event.detail;
   syncQueue = syncQueue
-    .then(() => writeSnapshotToPowerSync(database, snapshot, currentUser.id))
+    .then(() => snapshotTools.writeSnapshotToPowerSync(database, snapshot, currentUser.id))
     .catch(error => {
       console.error("PowerSync local write failed:", error);
       showMessage("Alteração salva neste aparelho; sincronização pendente: " + error.message, "error");
@@ -118,6 +139,7 @@ function onLocalDataSaved(event) {
 }
 
 let currentUser = null;
+let startingUserId = null;
 
 function renderSignedOut() {
   setPanel('<button class="secondary sync-button" id="sync-open">Entrar / Criar conta</button><small class="sync-caption">Sincronização entre dispositivos</small>');
@@ -176,7 +198,7 @@ if (!configured()) {
 } else if (!panel || !dialog || !form || !message || !submit) {
   console.error("PowerSync UI elements are missing from index.html");
 } else {
-  const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
+  supabase = createClient(config.supabaseUrl, config.supabaseKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
 
