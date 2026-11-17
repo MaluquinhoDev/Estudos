@@ -7,6 +7,8 @@
 
 Este documento separa código já enviado ao repositório de serviços externos que ainda dependem da configuração do proprietário.
 
+Para a sequência completa de execução, os comandos atualizados da Supabase CLI, os critérios de parada, os testes de duas contas e o checklist de ativação, consulte também o [guia detalhado dos próximos passos do backend](./GUIA-PROXIMAS-ETAPAS-BACKEND.md).
+
 ## 1. O que já foi implementado no código
 
 - Login e criação de conta por e-mail/senha com Supabase Auth.
