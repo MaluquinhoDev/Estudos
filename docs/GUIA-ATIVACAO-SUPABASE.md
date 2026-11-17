@@ -25,18 +25,21 @@ Este documento separa código já enviado ao repositório de serviços externos 
 
 **Limite importante:** a aplicação ainda mantém `localStorage` como camada de compatibilidade para a interface. As alterações são espelhadas no SQLite/PowerSync. A troca integral da camada de leitura para SQLite não foi feita.
 
-## 2. Etapa obrigatória — conferir o banco Supabase
+## 2. Etapa obrigatória — reconciliar o banco Supabase existente
 
-A migration `supabase/migrations/20261117000050_create_ava_schema.sql` cria as seis tabelas do AVA, índices, chaves estrangeiras e políticas RLS. Ela foi ordenada antes de `20261117000100_grant_authenticated_data_api.sql`, que concede os privilégios do Data API ao papel `authenticated`. O GitHub Actions valida a estrutura desses arquivos; ele não aplica SQL no banco remoto.
+O projeto Supabase já possui schemas e objetos de banco. **Este repositório não deve presumir que o banco remoto esteja vazio nem recriar sua estrutura inicial.** A migration de bootstrap `20261117000050_create_ava_schema.sql` foi removida porque sua criação de tabelas não foi fundamentada em uma inspeção do esquema real.
 
-Antes de ativar o deploy automático:
-1. Abra o [Dashboard Supabase](https://supabase.com/dashboard/project/bkhrxosiumviprnhlbim).
-2. Confira se as tabelas `profiles`, `courses`, `modules`, `lessons`, `review_cards` e `resources` existem.
-3. Confira os registros em `supabase_migrations.schema_migrations` e compare com os arquivos em `supabase/migrations/`.
-4. Faça um backup verificável.
-5. Reconcilie diferenças entre banco remoto e migrations versionadas.
+A migration `20261117000100_grant_authenticated_data_api.sql` permanece separada: ela concede privilégios ao papel `authenticated`, mas pressupõe que as seis tabelas usadas pelo AVA já existam e tenham colunas compatíveis com o conector e com `powersync/sync-config.yaml`.
 
-A primeira migration cria o esquema. A execução anterior do workflow falhou na autenticação do PostgreSQL, portanto não comprovou se a migration inicial já foi aplicada. Não execute `db reset --remote` e não aplique a migration inicial às cegas.
+Antes de qualquer deploy de migrations:
+1. Abra o [Dashboard Supabase](https://supabase.com/dashboard/project/bkhrxosiumviprnhlbim) e identifique o schema correto e as tabelas existentes.
+2. Compare nomes, colunas, tipos, chaves, índices e políticas RLS com o que o AVA e o PowerSync realmente utilizam.
+3. Confira o histórico remoto com `supabase migration list`.
+4. Faça backup verificável.
+5. Para adotar o banco remoto existente no histórico local, siga o procedimento oficial de baseline com `supabase db pull`, revise o SQL gerado e só então versionar migrations incrementais.
+6. Não execute `db reset --remote`, não aplique uma migration de criação de tabelas às cegas e não habilite deploy automático antes da reconciliação.
+
+A documentação do Supabase alerta que alterações feitas diretamente no Dashboard/SQL Editor podem não estar registradas no histórico de migrations. O baseline precisa refletir o estado real do banco; `CREATE TABLE IF NOT EXISTS` não verifica se uma tabela existente possui as colunas, constraints e políticas esperadas.
 
 ## 3. Conectar Supabase ao GitHub
 
@@ -47,7 +50,7 @@ A primeira migration cria o esquema. A execução anterior do workflow falhou na
 5. Configure a branch `main`.
 6. Mantenha **Deploy to production** desativado até concluir a reconciliação da etapa 2.
 
-Depois da revisão do esquema e do histórico:
+Depois da revisão do esquema, da criação/reconciliação do baseline e do histórico:
 1. Ative **Deploy to production** para `main`.
 2. Salve a configuração.
 3. Acompanhe a primeira implantação no painel Supabase.
