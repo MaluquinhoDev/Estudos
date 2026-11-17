@@ -24,6 +24,7 @@ let suppressLocalEventsForUser = null;
 let applyingPowerSyncChangesForUser = null;
 let syncQueue = Promise.resolve();
 let sessionGeneration = 0;
+let isolatedUserId = null;
 import {
   OWNER_KEY,
   emptySnapshot,
@@ -47,6 +48,7 @@ function persistWorkspaceSnapshot(userId, snapshot) {
 
 function isolateCurrentWorkspace() {
   const snapshot = window.EstudosBridge?.getSnapshot?.() || emptySnapshot();
+  isolatedUserId = currentUser?.id || localStorage.getItem(OWNER_KEY);
   preserveWorkspace(localStorage, snapshot, currentUser?.id || null);
   window.EstudosBridge?.clearSnapshot?.();
 }
@@ -191,6 +193,7 @@ async function startSync(session) {
       }
     }, { tables: ["courses", "modules", "lessons", "review_cards", "resources"], throttleMs: 350 });
     showMessage("Sincronização ativa. Dados locais e remotos conciliados.", "success");
+    isolatedUserId = null;
     revealWorkspace();
   } catch (error) {
     if (isCurrentSession()) {
@@ -237,9 +240,18 @@ function renderSignedIn(user) {
   setPanel('<div class="sync-user"><span class="sync-indicator"></span><span><strong>Conta conectada</strong><small>' +
     escapeHtml(user.email || user.id) + '</small><small id="sync-status">Preparando sincronização…</small></span></div><button class="secondary sync-button" id="sync-logout">Sair da conta</button>');
   document.querySelector("#sync-logout")?.addEventListener("click", async () => {
+    hideWorkspace();
+    isolateCurrentWorkspace();
     await stopSync();
     const { error } = await supabase.auth.signOut();
-    if (error) showMessage(error.message, "error");
+    if (error) {
+      currentUser = user;
+      isolatedUserId = null;
+      localStorage.setItem(OWNER_KEY, user.id);
+      window.EstudosBridge?.replaceSnapshot?.(readUserWorkspace(user.id));
+      revealWorkspace();
+      showMessage(error.message, "error");
+    }
   });
 }
 
@@ -304,8 +316,9 @@ if (!configured()) {
     if (event === "INITIAL_SESSION") return;
     if (event === "SIGNED_OUT" || !session?.user) {
       hideWorkspace();
-      isolateCurrentWorkspace();
+      if (!currentUser || isolatedUserId !== currentUser.id) isolateCurrentWorkspace();
       currentUser = null;
+      isolatedUserId = null;
       await stopSync();
       restoreGuestWorkspace();
       renderSignedOut();
@@ -316,6 +329,7 @@ if (!configured()) {
       hideWorkspace();
       isolateCurrentWorkspace();
       currentUser = session.user;
+      isolatedUserId = null;
       renderSignedIn(currentUser);
       try {
         await startSync(session);
@@ -339,6 +353,7 @@ if (!configured()) {
       hideWorkspace();
       isolateCurrentWorkspace();
       currentUser = data.session.user;
+      isolatedUserId = null;
       renderSignedIn(currentUser);
       try {
         await startSync(data.session);
