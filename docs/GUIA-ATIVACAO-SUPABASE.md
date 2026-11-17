@@ -32,12 +32,16 @@ O projeto Supabase já possui schemas e objetos de banco. **Este repositório n�
 A migration `20261117000100_grant_authenticated_data_api.sql` permanece separada: ela concede privilégios ao papel `authenticated`, mas pressupõe que as seis tabelas usadas pelo AVA já existam e tenham colunas compatíveis com o conector e com `powersync/sync-config.yaml`.
 
 Antes de qualquer deploy de migrations:
-1. Abra o [Dashboard Supabase](https://supabase.com/dashboard/project/bkhrxosiumviprnhlbim) e identifique o schema correto e as tabelas existentes.
-2. Compare nomes, colunas, tipos, chaves, índices e políticas RLS com o que o AVA e o PowerSync realmente utilizam.
-3. Confira o histórico remoto com `supabase migration list`.
-4. Faça backup verificável.
-5. Para adotar o banco remoto existente no histórico local, siga o procedimento oficial de baseline com `supabase db pull`, revise o SQL gerado e só então versionar migrations incrementais.
-6. Não execute `db reset --remote`, não aplique uma migration de criação de tabelas às cegas e não habilite deploy automático antes da reconciliação.
+1. Faça um backup verificável do projeto Supabase.
+2. Execute o SQL somente de leitura em `supabase/diagnostics/ava_schema_preflight.sql` no SQL Editor. Cada tabela precisa apresentar `PASS` para existência, colunas, chave primária `id` e RLS. A verificação de políticas também precisa apresentar `PASS`.
+3. Compare o resultado com `src/powersync/schema.js`, `src/powersync/snapshot.js` e `powersync/sync-config.yaml`. O diagnóstico verifica nomes e presença de colunas; tipos, nulabilidade, FKs e semântica das políticas ainda exigem revisão.
+4. Confira o histórico com `supabase migration list --remote` e guarde a saída.
+5. Como `supabase/migrations` já contém uma migration incremental de grants, **não rode `supabase db pull` diretamente nessa pasta**. Faça o baseline em um clone/worktree temporário limpo do mesmo repositório, com `supabase/config.toml` e diretório `supabase/migrations` vazio. Com o projeto linkado, execute `supabase db pull --schema public` nesse diretório temporário. Revise o SQL gerado e confirme que ele representa o estado remoto existente; não aceite nem marque baseline aplicado se houver diferenças inexplicadas.
+6. Depois de obter o baseline, incorpore-o ao repositório principal com timestamp anterior à migration incremental de grants. Se o timestamp gerado for posterior a `20261117000100`, renomeie a migration de grants para um timestamp posterior ao baseline, mantendo o nome descritivo. Preserve os arquivos originais até a revisão terminar.
+7. Rode novamente `supabase migration list --remote`: baseline deve constar como aplicado e a migration de grants deve aparecer como pendente até ser deliberadamente implantada.
+8. Só então habilite deploy automático. Não execute `db reset --remote`, não use `migration repair` para mascarar divergências e não aplique migrations de criação de tabelas às cegas.
+
+`supabase migration repair` altera apenas o histórico, não executa o SQL. `supabase db pull` precisa de Docker para gerar o diff local. O baseline não é uma migration para recriar o banco de produção; ele registra no repositório o estado já existente.
 
 A documentação do Supabase alerta que alterações feitas diretamente no Dashboard/SQL Editor podem não estar registradas no histórico de migrations. O baseline precisa refletir o estado real do banco; `CREATE TABLE IF NOT EXISTS` não verifica se uma tabela existente possui as colunas, constraints e políticas esperadas.
 
@@ -130,6 +134,8 @@ O CI agora verifica:
 - sintaxe JavaScript;
 - estrutura do AVA;
 - isolamento do upload por usuário;
+- alvo de upsert compatível com a chave primária `id`;
+- presença do diagnóstico SQL de schema remoto (a consulta precisa ser executada manualmente no Supabase);
 - filtros de Sync Streams;
 - migração SQL de privilégios;
 - testes unitários de conversão e conflito;
