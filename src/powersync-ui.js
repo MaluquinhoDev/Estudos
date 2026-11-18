@@ -354,6 +354,7 @@ if (!configured()) {
       if (!currentUser || isolatedUserId !== currentUser.id) isolateCurrentWorkspace();
       currentUser = null;
       isolatedUserId = null;
+      window.EstudosBridge?.setPedagogyOwner?.("guest");
       await stopSync();
       restoreGuestWorkspace();
       renderSignedOut();
@@ -365,6 +366,7 @@ if (!configured()) {
       isolateCurrentWorkspace();
       currentUser = session.user;
       isolatedUserId = null;
+      window.EstudosBridge?.setPedagogyOwner?.(currentUser.id);
       renderSignedIn(currentUser);
       try {
         await startSync(session);
@@ -389,6 +391,7 @@ if (!configured()) {
       isolateCurrentWorkspace();
       currentUser = data.session.user;
       isolatedUserId = null;
+      window.EstudosBridge?.setPedagogyOwner?.(currentUser.id);
       renderSignedIn(currentUser);
       try {
         await startSync(data.session);
