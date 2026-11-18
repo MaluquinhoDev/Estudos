@@ -52,7 +52,7 @@ async function runResearch(query,kind){
    const response=await fetch(url,{headers:{Accept:'application/json'}});
    if(!response.ok){if(response.status===429)throw Error('Limite gratuito do Mwmbl atingido. A cota anônima é limitada; tente novamente após a renovação.');throw Error('Mwmbl HTTP '+response.status);}
    const json=await response.json();
-   searchResults=(json.results||[]).map(item=>({provider:'Mwmbl'+(item.engine?' · '+item.engine:''),title:item.title||'Sem título',description:item.content||'Sem descrição disponível.',url:item.url||'',domain:item.engine||'Índice Mwmbl'})).filter(item=>/^https?:\\/\\//i.test(item.url)).slice(0,20);
+   searchResults=(json.results||[]).map(item=>({provider:'Mwmbl'+(item.engine?' · '+item.engine:''),title:item.title||'Sem título',description:item.content||'Sem descrição disponível.',url:item.url||'',domain:item.engine||'Índice Mwmbl'})).filter(item=>/^https?:\/\//i.test(item.url)).slice(0,20);
    if(!searchResults.length)searchError='O Mwmbl não encontrou resultados para esta consulta.';
    return;
   }
