@@ -246,7 +246,18 @@ Permitir que uma pesquisa preparada fora do aplicativo se torne uma fonte de ref
 - Não gerar gabaritos de múltipla escolha por heurística: isso elevaria o risco de alternativas e respostas incorretas.
 - A primeira versão gera somente rascunhos de resposta aberta ancorados em trechos do material; a autoavaliação continua explícita e não é apresentada como correção automática.
 - A divisão em trechos reduz o volume de texto exibido e permite selecionar partes relevantes, mas não equivale a compreensão semântica ou RAG.
-- Arquivos ficam limitados a 1 MB, cada material a 180 mil caracteres e o conjunto a 500 mil caracteres para proteger o armazenamento local.
+- Não há limites artificiais de tamanho por arquivo, por material ou de quantidade de materiais. O conteúdo original e normalizado é armazenado em IndexedDB, separado do localStorage usado pelos dados gerais. Permanecem os limites físicos de cota, memória e desempenho impostos pelo navegador e pelo dispositivo; erros de cota são apresentados em diagnóstico persistente.
 - Conteúdo original e texto normalizado entram no backup JSON.
 - Materiais permanecem locais ao espaço de trabalho neste dispositivo e não entram nas tabelas/streams atuais do PowerSync. Sincronização entre dispositivos exige esquema, RLS, streams, migração e testes específicos.
 - PDF, DOCX, OCR, embeddings e geração automática por IA ficam fora desta etapa para preservar o bundle e a responsividade.
+
+
+## 8. Armazenamento e diagnóstico da importação de materiais
+
+- A importação de materiais utiliza IndexedDB, evitando o limite pequeno do localStorage para armazenar textos extensos. O localStorage mantém apenas os dados gerais do aplicativo; os materiais são carregados do banco local antes da inicialização da sincronização.
+- A migração inicial transfere materiais legados do snapshot antigo para IndexedDB sem descartar o conteúdo original.
+- Não são impostos limites fixos de bytes, caracteres por material ou quantidade total de materiais. O navegador continua aplicando sua própria cota de armazenamento, e a memória disponível no dispositivo limita o tamanho que pode ser processado de uma só vez.
+- O formulário mantém um diagnóstico visível com etapa da falha, nome e tamanho do arquivo, explicação de formato incompatível, conteúdo vazio, erro de leitura ou erro de gravação. Após importação bem-sucedida, informa caracteres extraídos, trechos criados e estimativa de armazenamento do navegador.
+- PDF e DOCX são identificados explicitamente, mas ainda não têm extração integrada; o usuário recebe essa informação em vez de uma falha silenciosa. Formatos textuais aceitos: TXT, Markdown, LaTeX, HTML, CSV, JSON, BibTeX e RIS.
+- Backup JSON continua incluindo o conteúdo integral dos materiais. A restauração grava os materiais no IndexedDB e valida sua estrutura sem truncar por um limite de caracteres.
+- IndexedDB é armazenamento local do navegador, não sincronização entre dispositivos. Limpeza de dados do site, remoção do perfil ou cota excedida podem afetar os materiais; backups continuam sendo a cópia portátil.

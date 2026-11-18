@@ -212,7 +212,7 @@ jobs:
             'sourceMaterialId:draft.sourceMaterialId',
             'sourceExcerpt:draft.sourceExcerpt',
             'studyMaterials:data.studyMaterials||[]',
-            'studyMaterials:Array.isArray(source.studyMaterials)',
+            'const materials=Array.isArray(source.studyMaterials)',
             'counts.studyMaterials'
           ]) {
             if (!app.includes(token)) throw new Error('Study material workflow missing: ' + token);
@@ -220,6 +220,24 @@ jobs:
           for (const token of ['.study-material-panel{', '.study-material-form{', '.study-material-section{']) {
             if (!css.includes(token)) throw new Error('Study material style missing: ' + token);
           }
+          NODE
+      - name: Validate study material storage and diagnostics
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const app = fs.readFileSync('app.js', 'utf8');
+          const css = fs.readFileSync('styles.css', 'utf8');
+          const panel = app.slice(app.indexOf('function studyMaterialPanel'), app.indexOf('async function importStudyMaterial'));
+          for (const token of ['indexedDB.open', 'study_materials', 'function initializeStudyMaterials', 'function studyMaterialReport', 'function studyMaterialStorageInfo', 'await putStudyMaterialRecord(material)', 'await deleteStudyMaterialRecord', 'await replaceStudyMaterialRecords', 'Etapa: ', 'QuotaExceededError']) {
+            if (!app.includes(token)) throw new Error('Study material storage/diagnostics missing: ' + token);
+          }
+          if (app.includes('file.size>1024*1024') || app.includes('plainText.length>180000') || app.includes('total+plainText.length>500000') || panel.includes('maxlength="180000"')) {
+            throw new Error('An artificial study material import limit remains');
+          }
+          if (!panel.includes('id="study-material-diagnostics"') || !css.includes('.study-material-diagnostics{')) {
+            throw new Error('Persistent study material diagnostics UI is missing');
+          }
+          if (!app.includes('format==="pdf"||format==="docx"')) throw new Error('Unsupported PDF/DOCX files must receive an explicit diagnosis');
           NODE
       - name: Validate responsive layout safeguards
         run: |
