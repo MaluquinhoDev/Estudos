@@ -29,7 +29,7 @@ function progress(){let ls=lessons(),total=ls.length||1;return '<div class="page
 function researchPage(){
  const history=(data.researchSearches||[]).slice(0,8),saved=data.researchSources||[];
  return '<div class="page-title"><div><small class="eyebrow">DESCOBERTA E INVESTIGAÇÃO</small><h1>Pesquisa</h1><p>Busque na web, consulte literatura acadêmica e organize fontes no seu espaço de estudos.</p></div></div>'+
- '<section class="panel research-search"><form id="research-form"><label for="research-query">O que você está investigando?</label><div class="research-input"><input id="research-query" name="query" type="search" maxlength="240" value="'+esc(searchTerm)+'" placeholder="Ex.: evidências sobre complexidade de algoritmos" required><button class="primary" type="submit" '+(searchLoading?'disabled':'')+'>'+(searchLoading?'Buscando…':'Pesquisar')+'</button></div><div class="research-tabs"><button type="button" class="'+(searchKind==='academica'?'selected':'')+'" data-search-kind="academica">Acadêmica</button><button type="button" class="'+(searchKind==='web'?'selected':'')+'" data-search-kind="web">Web geral</button><button type="button" class="'+(searchKind==='preprints'?'selected':'')+'" data-search-kind="preprints">Preprints</button><button type="button" class="'+(searchKind==='dados'?'selected':'')+'" data-search-kind="dados">Dados abertos</button></div></form><p class="research-note">Busca acadêmica integrada usa OpenAlex e Crossref, sem chave ou assinatura. Web, preprints e dados abertos abrem pesquisas reais nos respectivos sites.</p></section>'+
+ '<section class="panel research-search"><form id="research-form"><label for="research-query">O que você está investigando?</label><div class="research-input"><input id="research-query" name="query" type="search" maxlength="240" value="'+esc(searchTerm)+'" placeholder="Ex.: evidências sobre complexidade de algoritmos" required><button class="primary" type="submit" '+(searchLoading?'disabled':'')+'>'+(searchLoading?'Buscando…':'Pesquisar')+'</button></div><div class="research-tabs"><button type="button" class="'+(searchKind==='academica'?'selected':'')+'" data-search-kind="academica">Acadêmica</button><button type="button" class="'+(searchKind==='web'?'selected':'')+'" data-search-kind="web">Wikipédia</button><button type="button" class="'+(searchKind==='preprints'?'selected':'')+'" data-search-kind="preprints">Preprints</button><button type="button" class="'+(searchKind==='dados'?'selected':'')+'" data-search-kind="dados">Dados abertos</button></div></form><p class="research-note">Acadêmica: OpenAlex e Crossref. Wikipédia e Wikidata: resultados integrados nesta tela, por APIs públicas. Preprints: consulta externa ao arXiv. Wikipédia não representa todo o índice da internet.</p></section>'+
  (searchError?'<p class="research-error" role="alert">'+esc(searchError)+'</p>':'')+
  (searchLoading?'<div class="quiet"><strong>Consultando fontes públicas…</strong><p>Isso pode levar alguns segundos.</p></div>':'')+
  (searchResults.length?'<section class="research-results"><header><h2>Resultados encontrados</h2><span class="pill">'+searchResults.length+'</span></header>'+searchResults.map((r,i)=>'<article class="research-result"><div><small>'+esc(r.provider||'Fonte pública')+(r.year?' · '+esc(r.year):'')+'</small><h3>'+esc(r.title||'Sem título')+'</h3><p>'+esc(r.description||'Sem resumo disponível na API.')+'</p><small>'+esc(r.authors||r.domain||'Metadados limitados')+'</small></div><footer><a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">Abrir fonte ↗</a><button class="secondary" data-save-source="'+i+'">'+(saved.some(x=>x.url===r.url)?'Salva na Biblioteca':'Salvar fonte')+'</button></footer></article>').join('')+'</section>':'')+
@@ -41,11 +41,30 @@ async function runResearch(query,kind){
  searchTerm=query.trim();searchKind=kind;searchError='';searchResults=[];searchLoading=true;render();
  const record={query:searchTerm,kind,at:new Date().toISOString()};data.researchSearches=[record,...(data.researchSearches||[]).filter(x=>x.query!==record.query||x.kind!==kind)].slice(0,30);save();
  try{
-  if(kind==='web'||kind==='preprints'||kind==='dados'){
-   const targets={web:'https://www.google.com/search?q=',preprints:'https://arxiv.org/search/?query=',dados:'https://www.wikidata.org/w/index.php?search='};
-   const url=targets[kind]+encodeURIComponent(searchTerm)+(kind==='preprints'?'&searchtype=all&abstracts=show&order=-announced_date_first&size=25':'');
+  if(kind==='preprints'){
+   const url='https://arxiv.org/search/?query='+encodeURIComponent(searchTerm)+'&searchtype=all&abstracts=show&order=-announced_date_first&size=25';
    window.open(url,'_blank','noopener,noreferrer');
-   searchError=kind==='web'?'A busca geral foi aberta no Google em outra aba. Os resultados permanecem no mecanismo de busca; os links podem ser cadastrados na Biblioteca.':kind==='preprints'?'A pesquisa de preprints foi aberta no arXiv.':'A pesquisa de dados abertos foi aberta no Wikidata.';
+   searchError='A consulta de preprints foi aberta no arXiv. Esta fonte ainda não fornece resultados integrados nesta versão.';
+   return;
+  }
+  if(kind==='web'){
+   const languages=['pt','en'];
+   const responses=await Promise.allSettled(languages.map(async lang=>{
+    const url='https://'+lang+'.wikipedia.org/w/api.php?action=query&list=search&srsearch='+encodeURIComponent(searchTerm)+'&srlimit=10&srprop=snippet%7Ctimestamp&format=json&origin=*';
+    const response=await fetch(url);if(!response.ok)throw Error('Wikipédia '+lang+' HTTP '+response.status);
+    const json=await response.json();return(json.query?.search||[]).map(item=>({provider:lang==='pt'?'Wikipédia · Português':'Wikipedia · English',title:item.title,year:item.timestamp?new Date(item.timestamp).getFullYear():'',description:String(item.snippet||'').replace(/<[^>]*>/g,' ').replace(/&quot;/g,'"').replace(/&#039;/g,"'").replace(/&amp;/g,'&').slice(0,650),url:'https://'+lang+'.wikipedia.org/wiki/'+encodeURIComponent(item.title.replace(/ /g,'_')),domain:lang+'.wikipedia.org'}));
+   }));
+   const rows=responses.flatMap(x=>x.status==='fulfilled'?x.value:[]);
+   if(!rows.length)throw Error('A pesquisa na Wikipédia não retornou resultados. Verifique a conexão.');
+   searchResults=rows.slice(0,20);
+   return;
+  }
+  if(kind==='dados'){
+   const url='https://www.wikidata.org/w/api.php?action=wbsearchentities&search='+encodeURIComponent(searchTerm)+'&language=pt&uselang=pt&limit=20&format=json&origin=*';
+   const response=await fetch(url);if(!response.ok)throw Error('Wikidata HTTP '+response.status);
+   const json=await response.json();
+   searchResults=(json.search||[]).map(item=>({provider:'Wikidata',title:item.label||item.id,description:item.description||'Sem descrição disponível.',authors:item.id,url:item.concepturi||('https://www.wikidata.org/wiki/'+item.id),domain:'Dados abertos'}));
+   if(!searchResults.length)searchError='Nenhuma entidade encontrada no Wikidata para esta consulta.';
    return;
   }
   const requests=[
@@ -76,8 +95,8 @@ document.addEventListener("click",e=>{
 let v=e.target.closest("[data-view]");if(v){setView(v.dataset.view);return}
 let kind=e.target.closest("[data-search-kind]");if(kind){searchKind=kind.dataset.searchKind;render();return}
 let repeat=e.target.closest("[data-repeat-query]");if(repeat){runResearch(repeat.dataset.repeatQuery,repeat.dataset.repeatKind);return}
-let saved=e.target.closest("[data-save-source]");if(saved){let r=searchResults[Number(saved.dataset.saveSource)];if(r){data.researchSources||=[];if(!data.researchSources.some(x=>x.url===r.url)){data.researchSources.unshift({...r,savedAt:new Date().toISOString()});data.resources.push({id:id(),title:r.title,type:"Pesquisa",url:r.url,description:r.description,courseId:"",courseTitle:""});save();toast("Fonte salva na Biblioteca.")}else toast("Esta fonte já está salva.");render()}return}
-let remove=e.target.closest("[data-remove-source]");if(remove){let source=data.researchSources.splice(Number(remove.dataset.removeSource),1)[0];data.resources=data.resources.filter(x=>x.url!==source?.url);save();render();return}
+let saved=e.target.closest("[data-save-source]");if(saved){let r=searchResults[Number(saved.dataset.saveSource)];if(r){data.researchSources||=[];if(!data.researchSources.some(x=>x.url===r.url)){const resourceId=id();data.researchSources.unshift({...r,resourceId,savedAt:new Date().toISOString()});data.resources.push({id:resourceId,title:r.title,type:"Pesquisa",url:r.url,description:r.description,courseId:"",courseTitle:""});save();toast("Fonte salva na Biblioteca.")}else toast("Esta fonte já está salva.");render()}return}
+let remove=e.target.closest("[data-remove-source]");if(remove){let source=data.researchSources.splice(Number(remove.dataset.removeSource),1)[0];if(source?.resourceId)data.resources=data.resources.filter(x=>x.id!==source.resourceId);save();render();return}
 let c=e.target.closest("button[data-course]:not([data-action])");if(c){courseOpen=c.dataset.course;view="cursos";document.querySelectorAll("[data-view]").forEach(b=>b.classList.toggle("active",b.dataset.view==="cursos"));$("#page-context").textContent="Meus cursos";render();return}
 let del=e.target.closest("[data-delete-course]");if(del){if(!confirm("Excluir este curso e cartões vinculados?"))return;let x=del.dataset.deleteCourse;data.courses=data.courses.filter(c=>c.id!==x);data.cards=data.cards.filter(c=>c.courseId!==x);data.resources=data.resources.filter(r=>r.courseId!==x);courseOpen=null;save();render();return}
 let dr=e.target.closest("[data-delete-resource]");if(dr){data.resources=data.resources.filter(r=>r.id!==dr.dataset.deleteResource);save();render();return}
