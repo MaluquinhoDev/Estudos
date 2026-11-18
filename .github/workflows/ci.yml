@@ -97,7 +97,19 @@ jobs:
         run: node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8')); if (!m.name || !m.start_url || !m.icons?.length) process.exit(1)"
       - name: Validate AVA structure
         run: node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); const j=fs.readFileSync('app.js','utf8'); for(const id of ['app-content','app-dialog','import-file','review-count']) if(!h.includes('id=\"'+id+'\"')) throw Error(id); for(const fn of ['dashboard','coursesPage','coursePage','reviews','library','progress','createBackup','downloadBackup','validateBackup','importData']) if(!j.includes('function '+fn)) throw Error(fn)"
-      - name: Validate backup export and safe restore\n        run: |\n          node <<'NODE'\n          const fs = require('node:fs');\n          const app = fs.readFileSync('app.js', 'utf8');\n          const html = fs.readFileSync('index.html', 'utf8');\n          for (const token of ['format:"estudos-ava-backup"', 'backupVersion:1', 'URL.createObjectURL(blob)', 'URL.revokeObjectURL(url)', 'await file.text()', 'validateBackup(raw)', 'identificador duplicado', 'const previous=data', 'if(!save())']) {\n            if (!app.includes(token)) throw new Error('Backup safeguard missing: ' + token);\n          }\n          for (const token of ['Baixar backup', 'Restaurar backup', 'accept=".json,application/json"']) {\n            if (!html.includes(token)) throw new Error('Backup interface missing: ' + token);\n          }\n          NODE\n      - name: Validate generated dialog form styling
+      - name: Validate backup export and safe restore
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const app = fs.readFileSync('app.js', 'utf8');
+          const html = fs.readFileSync('index.html', 'utf8');
+          for (const token of ['format:"estudos-ava-backup"', 'backupVersion:1', 'URL.createObjectURL(blob)', 'URL.revokeObjectURL(url)', 'await file.text()', 'validateBackup(raw)', 'identificador duplicado', 'const previous=data', 'if(!save())']) {
+            if (!app.includes(token)) throw new Error('Backup safeguard missing: ' + token);
+          }
+          for (const token of ['Baixar backup', 'Restaurar backup', 'accept=".json,application/json"']) {
+            if (!html.includes(token)) throw new Error('Backup interface missing: ' + token);
+          }
+          NODE\n      - name: Validate generated dialog form styling
         run: |
           node <<'NODE'
           const fs = require('node:fs');
