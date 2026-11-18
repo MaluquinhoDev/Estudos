@@ -225,3 +225,28 @@ Não antecipar o motor pedagógico completo antes da integridade de identidade e
 
 ---
 **Status:** pesquisa e especificação documentadas. Nenhum novo editor, quiz, mapa conceitual ou sistema de tentativas é declarado como funcional nesta entrega.
+
+
+## 7. Materiais de estudo importados e atividades fundamentadas
+
+### Objetivo
+Permitir que uma pesquisa preparada fora do aplicativo se torne uma fonte de referência vinculada ao percurso de aprendizagem e às atividades, sem exigir inferência semântica pesada no navegador.
+
+### Fluxo
+1. Importar arquivo textual (TXT, Markdown, LaTeX, HTML, CSV, JSON de pesquisa, BibTeX ou RIS) ou colar texto.
+2. Normalizar o texto localmente, preservando o conteúdo original.
+3. Dividir o texto por títulos e parágrafos em trechos de até aproximadamente 4.500 caracteres.
+4. Associar o material a um curso.
+5. Vincular objetivos de aprendizagem ao mesmo curso.
+6. Criar uma atividade aberta a partir de um trecho: o enunciado é um rascunho, o trecho integral fica como resposta de referência e a atividade mantém a proveniência.
+7. Revisar e editar enunciado, resposta de referência e critério antes de salvar.
+
+### Decisões de desempenho e confiabilidade
+- Não incorporar um LLM ou banco vetorial ao frontend.
+- Não gerar gabaritos de múltipla escolha por heurística: isso elevaria o risco de alternativas e respostas incorretas.
+- A primeira versão gera somente rascunhos de resposta aberta ancorados em trechos do material; a autoavaliação continua explícita e não é apresentada como correção automática.
+- A divisão em trechos reduz o volume de texto exibido e permite selecionar partes relevantes, mas não equivale a compreensão semântica ou RAG.
+- Arquivos ficam limitados a 1 MB, cada material a 180 mil caracteres e o conjunto a 500 mil caracteres para proteger o armazenamento local.
+- Conteúdo original e texto normalizado entram no backup JSON.
+- Materiais permanecem locais ao espaço de trabalho neste dispositivo e não entram nas tabelas/streams atuais do PowerSync. Sincronização entre dispositivos exige esquema, RLS, streams, migração e testes específicos.
+- PDF, DOCX, OCR, embeddings e geração automática por IA ficam fora desta etapa para preservar o bundle e a responsividade.

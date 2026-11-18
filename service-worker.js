@@ -1,4 +1,4 @@
-const PREFIX="estudos-ava-",VERSION="v6",CACHE=PREFIX+VERSION;
+const PREFIX="estudos-ava-",VERSION="v7",CACHE=PREFIX+VERSION;
 const SHELL=["./","./index.html","./styles.css","./app.js","./powersync.js","./manifest.webmanifest","./icons/icon.svg"];
 self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL))));
 self.addEventListener("activate",e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith(PREFIX)&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
