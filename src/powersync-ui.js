@@ -61,6 +61,7 @@ function isolateCurrentWorkspace() {
 }
 
 function restoreGuestWorkspace() {
+  window.EstudosBridge?.setPedagogyOwner?.("guest");
   window.EstudosBridge?.replaceSnapshot?.(loadGuestSnapshot(localStorage));
 }
 
