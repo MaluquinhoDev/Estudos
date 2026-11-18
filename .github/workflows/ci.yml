@@ -169,6 +169,19 @@ jobs:
             if (!css.includes(token)) throw new Error('Missing mobile form safeguard: ' + token);
           }
           NODE
+      - name: Validate course and practice integration
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const app = fs.readFileSync('app.js', 'utf8');
+          const css = fs.readFileSync('styles.css', 'utf8');
+          for (const token of ['function objectiveActivities', 'function lessonObjectives', 'function objectiveEvidence', 'data-action="practice-lesson"', 'data-action="open-course-practice"', 'removedObjectiveIds', 'scopedObjectives', 'EVIDÊNCIAS DE PRÁTICA']) {
+            if (!app.includes(token)) throw new Error('Course/practice integration missing: ' + token);
+          }
+          for (const token of ['.lesson-practice{', '.lesson-objectives{', '.course-evidence{']) {
+            if (!css.includes(token)) throw new Error('Missing integration style: ' + token);
+          }
+          NODE
       - name: Validate responsive layout safeguards
         run: |
           node -e 'const fs=require("fs"); const c=fs.readFileSync("styles.css","utf8"); for(const token of ["grid-template-columns: repeat(4, minmax(0, 1fr))","grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr)","@media (max-width: 820px)","@media (max-width: 420px)","overflow-y: auto","min-width: 0"]) if(!c.includes(token)) throw Error("Missing responsive safeguard: "+token)'
