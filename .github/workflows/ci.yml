@@ -212,7 +212,7 @@ jobs:
             'sourceMaterialId:draft.sourceMaterialId',
             'sourceExcerpt:draft.sourceExcerpt',
             'studyMaterials:data.studyMaterials||[]',
-            'studyMaterials:Array.isArray(source.studyMaterials)',
+            'const materials=Array.isArray(source.studyMaterials)',
             'counts.studyMaterials'
           ]) {
             if (!app.includes(token)) throw new Error('Study material workflow missing: ' + token);
