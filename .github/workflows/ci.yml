@@ -109,7 +109,8 @@ jobs:
           for (const token of ['Baixar backup', 'Restaurar backup', 'accept=".json,application/json"']) {
             if (!html.includes(token)) throw new Error('Backup interface missing: ' + token);
           }
-          NODE\n      - name: Validate generated dialog form styling
+          NODE
+      - name: Validate generated dialog form styling
         run: |
           node <<'NODE'
           const fs = require('node:fs');
