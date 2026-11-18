@@ -96,7 +96,7 @@ jobs:
       - name: Validate manifest
         run: node -e "const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.webmanifest','utf8')); if (!m.name || !m.start_url || !m.icons?.length) process.exit(1)"
       - name: Validate AVA structure
-        run: node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); const j=fs.readFileSync('app.js','utf8'); for(const id of ['app-content','app-dialog','import-file','review-count']) if(!h.includes('id=\"'+id+'\"')) throw Error(id); for(const fn of ['dashboard','coursesPage','coursePage','reviews','library','progress','createBackup','downloadBackup','validateBackup','importData']) if(!j.includes('function '+fn)) throw Error(fn)"
+        run: node -e "const fs=require('fs'); const h=fs.readFileSync('index.html','utf8'); const j=fs.readFileSync('app.js','utf8'); for(const id of ['app-content','app-dialog','import-file','review-count']) if(!h.includes('id=\"'+id+'\"')) throw Error(id); for(const fn of ['dashboard','coursesPage','coursePage','practicePage','newObjective','newActivity','submitPractice','reviews','library','progress','createBackup','downloadBackup','validateBackup','importData']) if(!j.includes('function '+fn)) throw Error(fn)"
       - name: Validate backup export and safe restore
         run: |
           node <<'NODE'
