@@ -55,6 +55,30 @@ test("merges distinct local and remote records without dropping either", () => {
   assert.deepEqual(merged.courses.map(course => course.id).sort(), ["local-course", "remote-course"]);
 });
 
+test("preserves local-only research and study materials when merging PowerSync records", () => {
+  const material = { id: "material-1", title: "Logística", content: "texto original", plainText: "texto normalizado" };
+  const local = {
+    schemaVersion: 2,
+    courses: [{ id: "local-course", title: "Local", modules: [] }],
+    cards: [],
+    resources: [],
+    researchSources: [{ url: "https://example.org", title: "Fonte local" }],
+    researchSearches: [{ query: "logística", kind: "academica" }],
+    studyMaterials: [material]
+  };
+  const remote = {
+    schemaVersion: 2,
+    courses: [{ id: "remote-course", title: "Remote", modules: [] }],
+    cards: [],
+    resources: []
+  };
+  const merged = mergeSnapshots(local, remote, userId);
+  assert.deepEqual(merged.studyMaterials, [material]);
+  assert.equal(merged.researchSources[0].title, "Fonte local");
+  assert.equal(merged.researchSearches[0].query, "logística");
+  assert.deepEqual(merged.courses.map(course => course.id).sort(), ["local-course", "remote-course"]);
+});
+
 test("rejects conflicting records instead of overwriting either version", () => {
   const local = {
     schemaVersion: 2,

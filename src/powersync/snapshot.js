@@ -363,6 +363,9 @@ export function mergeSnapshots(localSnapshot, remoteSnapshot, userId) {
       description: resource.description,
       courseId: resource.course_id || "",
       courseTitle: resource.course_title
-    }))
+    })),
+    researchSources: Array.isArray(localSnapshot?.researchSources) ? localSnapshot.researchSources : [],
+    researchSearches: Array.isArray(localSnapshot?.researchSearches) ? localSnapshot.researchSearches : [],
+    studyMaterials: Array.isArray(localSnapshot?.studyMaterials) ? localSnapshot.studyMaterials : []
   };
 }
